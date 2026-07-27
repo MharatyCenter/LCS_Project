@@ -16,15 +16,16 @@ export default function ClientsManager({ onSelect, selectedClientId }: ClientsMa
   const [editingClient, setEditingClient] = useState<clientsService.Client | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  const [formData, setFormData] = useState<clientsService.ClientInput>({
-    name: '',
-    email: '',
+  const [formData, setFormData] = useState({
+    client_name: '',
+    contract_date: '',
+    power_of_attorney_type: 'توكيل عام',
+    power_of_attorney_number: '',
+    power_of_attorney_date: '',
+    client_type: 'فردي',
     phone: '',
-    company: '',
-    national_id: '',
-    address: '',
-    client_type: 'Individual',
-    status: 'Active',
+    sector: 'خاص',
+    entity: '',
     notes: '',
   });
 
@@ -48,16 +49,17 @@ export default function ClientsManager({ onSelect, selectedClientId }: ClientsMa
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const clientData: clientsService.ClientInput = { 
-        name: formData.name,
-        email: formData.email || null,
+      const clientData = { 
+        client_name: formData.client_name,
+        contract_date: formData.contract_date || null,
+        power_of_attorney_type: formData.power_of_attorney_type || null,
+        power_of_attorney_number: formData.power_of_attorney_number || null,
+        power_of_attorney_date: formData.power_of_attorney_date || null,
+        client_type: formData.client_type || 'فردي',
         phone: formData.phone || null,
-        national_id: formData.national_id || null,
-        address: formData.address || null,
-        client_type: formData.client_type || 'Individual',
-        status: formData.status || 'Active',
-        notes: formData.notes || null,
-        company: formData.company || null
+        sector: formData.sector || 'خاص',
+        entity: formData.entity || null,
+        notes: formData.notes || null
       };
 
       if (editingClient) {
@@ -69,14 +71,15 @@ export default function ClientsManager({ onSelect, selectedClientId }: ClientsMa
       setIsModalOpen(false);
       setEditingClient(null);
       setFormData({
-        name: '',
-        email: '',
+        client_name: '',
+        contract_date: '',
+        power_of_attorney_type: 'توكيل عام',
+        power_of_attorney_number: '',
+        power_of_attorney_date: '',
+        client_type: 'فردي',
         phone: '',
-        company: '',
-        national_id: '',
-        address: '',
-        client_type: 'Individual',
-        status: 'Active',
+        sector: 'خاص',
+        entity: '',
         notes: '',
       });
       
@@ -89,26 +92,27 @@ export default function ClientsManager({ onSelect, selectedClientId }: ClientsMa
     }
   };
 
-  const handleEdit = (client: clientsService.Client, e: React.MouseEvent) => {
-    e.stopPropagation(); // منع انتقال الحدث لكي لا يتم اختيار العميل عند الضغط على زر التعديل
+  const handleEdit = (client: any, e: React.MouseEvent) => {
+    e.stopPropagation();
     setEditingClient(client);
     setFormData({
-      name: client.name || '',
-      email: client.email || '',
+      client_name: client.client_name || '',
+      contract_date: client.contract_date || '',
+      power_of_attorney_type: client.power_of_attorney_type || 'توكيل عام',
+      power_of_attorney_number: client.power_of_attorney_number || '',
+      power_of_attorney_date: client.power_of_attorney_date || '',
+      client_type: client.client_type || 'فردي',
       phone: client.phone || '',
-      company: client.company || '',
-      national_id: client.national_id || '',
-      address: client.address || '',
-      client_type: client.client_type || 'Individual',
-      status: client.status || 'Active',
+      sector: client.sector || 'خاص',
+      entity: client.entity || '',
       notes: client.notes || '',
     });
     setIsModalOpen(true);
   };
 
   const handleDelete = async (id: any, e: React.MouseEvent) => {
-    e.stopPropagation(); // منع انتقال الحدث
-    if (window.confirm('هل أنت متأكد من حذف هذا العميل نهائياً؟')) {
+    e.stopPropagation();
+    if (window.confirm('هل أنت متأكد من حذف هذا الموكل نهائياً؟')) {
       try {
         await clientsService.deleteClient(id);
         loadClients();
@@ -120,10 +124,10 @@ export default function ClientsManager({ onSelect, selectedClientId }: ClientsMa
   };
 
   const filteredClients = clients.filter(client => {
-    const nameMatch = client.name?.toLowerCase().includes(searchTerm.toLowerCase()) || false;
+    const nameMatch = client.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) || false;
     const phoneMatch = client.phone?.includes(searchTerm) || false;
-    const nationalIdMatch = client.national_id?.includes(searchTerm) || false;
-    return nameMatch || phoneMatch || nationalIdMatch;
+    const poaMatch = client.power_of_attorney_number?.includes(searchTerm) || false;
+    return nameMatch || phoneMatch || poaMatch;
   });
 
   return (
@@ -140,9 +144,9 @@ export default function ClientsManager({ onSelect, selectedClientId }: ClientsMa
           <div>
             <h2 className="text-xl font-bold text-navy-900 flex items-center gap-2">
               <Users className="h-5 w-5 text-cyan-600" />
-              إدارة العملاء
+              إدارة الموكلين
             </h2>
-            <p className="mt-1 text-xs text-slate-500">اضغط على أي عميل لتصفية القضايا الخاصة به في الأسفل.</p>
+            <p className="mt-1 text-xs text-slate-500">اضغط على أي موكل لتصفية القضايا الخاصة به في الأسفل.</p>
           </div>
         </div>
         
@@ -151,14 +155,15 @@ export default function ClientsManager({ onSelect, selectedClientId }: ClientsMa
             onClick={() => {
               setEditingClient(null);
               setFormData({
-                name: '',
-                email: '',
+                client_name: '',
+                contract_date: '',
+                power_of_attorney_type: 'توكيل عام',
+                power_of_attorney_number: '',
+                power_of_attorney_date: '',
+                client_type: 'فردي',
                 phone: '',
-                company: '',
-                national_id: '',
-                address: '',
-                client_type: 'Individual',
-                status: 'Active',
+                sector: 'خاص',
+                entity: '',
                 notes: '',
               });
               setIsModalOpen(true);
@@ -166,7 +171,7 @@ export default function ClientsManager({ onSelect, selectedClientId }: ClientsMa
             className="flex items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-cyan-700 transition-colors"
           >
             <Plus className="h-4 w-4" />
-            إضافة عميل جديد
+            إضافة موكل جديد
           </button>
         )}
       </div>
@@ -177,7 +182,7 @@ export default function ClientsManager({ onSelect, selectedClientId }: ClientsMa
             <Search className="h-5 w-5 text-slate-400" />
             <input
               type="text"
-              placeholder="بحث باسم العميل، رقم الهاتف، أو الرقم القومي..."
+              placeholder="بحث باسم الموكل، رقم الهاتف، أو رقم التوكيل..."
               className="w-full bg-transparent text-sm text-slate-800 placeholder-slate-400 focus:outline-none"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -189,65 +194,59 @@ export default function ClientsManager({ onSelect, selectedClientId }: ClientsMa
               <table className="w-full border-collapse text-right text-sm text-slate-600">
                 <thead className="bg-slate-50 text-xs font-semibold text-slate-700 uppercase">
                   <tr>
-                    <th className="px-6 py-4">الاسم</th>
-                    <th className="px-6 py-4">الهاتف / البريد</th>
-                    <th className="px-6 py-4">الرقم القومي / الشركة</th>
-                    <th className="px-6 py-4">النوع</th>
-                    <th className="px-6 py-4">الحالة</th>
+                    <th className="px-6 py-4">اسم الموكل</th>
+                    <th className="px-6 py-4">الهاتف / التوكيل</th>
+                    <th className="px-6 py-4">نوع الموكل</th>
+                    <th className="px-6 py-4">القطاع والجهة</th>
                     <th className="px-6 py-4 text-left">إجراءات</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {loading ? (
                     <tr>
-                      <td colSpan={6} className="px-6 py-10 text-center text-slate-400">جاري تحميل البيانات...</td>
+                      <td colSpan={5} className="px-6 py-10 text-center text-slate-400">جاري تحميل البيانات...</td>
                     </tr>
                   ) : filteredClients.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-6 py-10 text-center text-slate-400">لا يوجد عملاء مسجلين حالياً.</td>
+                      <td colSpan={5} className="px-6 py-10 text-center text-slate-400">لا يوجد موكلون مسجلون حالياً.</td>
                     </tr>
                   ) : (
-                    filteredClients.map((client) => {
-                      const isSelected = selectedClientId === client.id;
+                    filteredClients.map((client: any) => {
+                      const isSelected = selectedClientId === client.client_code;
                       return (
                         <tr 
-                          key={client.id} 
-                          onClick={() => onSelect && onSelect(isSelected ? null : client.id)}
+                          key={client.client_code} 
+                          onClick={() => onSelect && onSelect(isSelected ? null : client.client_code)}
                           className={`cursor-pointer transition-colors ${
                             isSelected ? 'bg-cyan-50/80 border-r-4 border-cyan-600' : 'hover:bg-slate-50/70'
                           }`}
-                          title="اضغط لتصفية القضايا الخاصة بهذا العميل"
+                          title="اضغط لتصفية القضايا الخاصة بهذا الموكل"
                         >
                           <td className="px-6 py-4 font-medium text-navy-950 flex items-center gap-2">
-                            {client.name}
+                            {client.client_name}
                             {isSelected && (
                               <span className="text-[10px] bg-cyan-600 text-white px-2 py-0.5 rounded-full">معروض حالياً</span>
                             )}
                           </td>
                           <td className="px-6 py-4">
                             <div className="font-medium text-slate-800">{client.phone || '—'}</div>
-                            <div className="text-xs text-slate-400">{client.email || ''}</div>
+                            <div className="text-xs text-slate-400">{client.power_of_attorney_type}: {client.power_of_attorney_number || 'بدون رقم'}</div>
                           </td>
                           <td className="px-6 py-4">
-                            <div className="text-slate-800 font-medium">{client.national_id || '—'}</div>
-                            <div className="text-xs text-slate-400">{client.company || ''}</div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${client.client_type === 'Company' ? 'bg-cyan-50 text-cyan-700' : 'bg-purple-50 text-purple-700'}`}>
-                              {client.client_type === 'Company' ? 'شركة' : 'فرد'}
+                            <span className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-cyan-50 text-cyan-700">
+                              {client.client_type}
                             </span>
                           </td>
                           <td className="px-6 py-4">
-                            <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${client.status === 'Active' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                              {client.status === 'Active' ? 'نشط' : 'غير نشط'}
-                            </span>
+                            <div className="text-slate-800 font-medium">{client.sector}</div>
+                            <div className="text-xs text-slate-400">{client.entity || '—'}</div>
                           </td>
                           <td className="px-6 py-4 text-left">
                             <div className="flex justify-end gap-2">
                               <button onClick={(e) => handleEdit(client, e)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-navy-600 transition-colors">
                                 <Edit2 className="h-4 w-4" />
                               </button>
-                              <button onClick={(e) => handleDelete(client.id, e)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-rose-600 transition-colors">
+                              <button onClick={(e) => handleDelete(client.client_code, e)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-rose-600 transition-colors">
                                 <Trash2 className="h-4 w-4" />
                               </button>
                             </div>
@@ -267,52 +266,62 @@ export default function ClientsManager({ onSelect, selectedClientId }: ClientsMa
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fade-in">
           <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-xl border border-slate-100 animate-scale-in">
             <div className="bg-slate-50 px-6 py-4 border-b border-slate-100">
-              <h3 className="text-lg font-bold text-navy-900">{editingClient ? 'تعديل بيانات العميل' : 'إضافة عميل جديد'}</h3>
+              <h3 className="text-lg font-bold text-navy-900">{editingClient ? 'تعديل بيانات الموكل' : 'إضافة موكل جديد'}</h3>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">الاسم الكامل *</label>
-                  <input type="text" required className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
+                  <label className="block text-xs font-bold text-slate-700 mb-1">اسم الموكل *</label>
+                  <input type="text" required className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.client_name} onChange={e => setFormData({ ...formData, client_name: e.target.value })} />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">الرقم القومي / جواز السفر</label>
-                  <input type="text" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.national_id || ''} onChange={e => setFormData({ ...formData, national_id: e.target.value })} />
+                  <label className="block text-xs font-bold text-slate-700 mb-1">تاريخ التعاقد</label>
+                  <input type="date" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.contract_date} onChange={e => setFormData({ ...formData, contract_date: e.target.value })} />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">رقم الهاتف</label>
-                  <input type="text" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.phone || ''} onChange={e => setFormData({ ...formData, phone: e.target.value })} />
+                  <label className="block text-xs font-bold text-slate-700 mb-1">نوع التوكيل</label>
+                  <select className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.power_of_attorney_type} onChange={e => setFormData({ ...formData, power_of_attorney_type: e.target.value })}>
+                    <option value="توكيل عام">توكيل عام</option>
+                    <option value="توكيل خاص">توكيل خاص</option>
+                  </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">البريد الإلكتروني</label>
-                  <input type="email" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.email || ''} onChange={e => setFormData({ ...formData, email: e.target.value })} />
+                  <label className="block text-xs font-bold text-slate-700 mb-1">رقم التوكيل</label>
+                  <input type="text" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.power_of_attorney_number} onChange={e => setFormData({ ...formData, power_of_attorney_number: e.target.value })} />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">الشركة / الجهة</label>
-                  <input type="text" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.company || ''} onChange={e => setFormData({ ...formData, company: e.target.value })} />
+                  <label className="block text-xs font-bold text-slate-700 mb-1">تاريخ التوكيل</label>
+                  <input type="date" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.power_of_attorney_date} onChange={e => setFormData({ ...formData, power_of_attorney_date: e.target.value })} />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">العنوان</label>
-                  <input type="text" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.address || ''} onChange={e => setFormData({ ...formData, address: e.target.value })} />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">تصنيف العميل</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">نوع الموكل</label>
                   <select className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.client_type} onChange={e => setFormData({ ...formData, client_type: e.target.value })}>
-                    <option value="Individual">فرد</option>
-                    <option value="Company">شركة / مؤسسة</option>
+                    <option value="فردي">فردي</option>
+                    <option value="شركة">شركة</option>
+                    <option value="هيئة">هيئة</option>
+                    <option value="جمعية اهلية">جمعية اهلية</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">حالة الحساب</label>
-                  <select className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })}>
-                    <option value="Active">نشط</option>
-                    <option value="Inactive">غير نشط</option>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">رقم التليفون</label>
+                  <input type="text" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">القطاع</label>
+                  <select className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.sector} onChange={e => setFormData({ ...formData, sector: e.target.value })}>
+                    <option value="اهلي">اهلي</option>
+                    <option value="خاص">خاص</option>
+                    <option value="حكومي">حكومي</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">الجهة</label>
+                  <input type="text" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.entity} onChange={e => setFormData({ ...formData, entity: e.target.value })} />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">ملاحظات إضافية</label>
-                <textarea rows={3} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.notes || ''} onChange={e => setFormData({ ...formData, notes: e.target.value })} />
+                <label className="block text-xs font-bold text-slate-700 mb-1">ملاحظات</label>
+                <textarea rows={3} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} />
               </div>
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                 <button type="button" onClick={() => { setIsModalOpen(false); setEditingClient(null); }} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">إلغاء</button>
