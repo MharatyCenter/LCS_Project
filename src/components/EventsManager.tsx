@@ -6,9 +6,9 @@ import {
   Pencil,
   Clock,
   MapPin,
-  ArrowRight,
-  AlertCircle,
   Gavel,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import {
   getEvents,
@@ -27,8 +27,6 @@ import {
   Spinner,
   EmptyState,
   ErrorBanner,
-  Textarea,
-  DateInput,
   ConfirmDialog,
 } from './ui';
 import { triggerRefresh } from '../utils/refreshUtils';
@@ -69,8 +67,8 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
 };
 
 const EVENT_TYPE_STYLES: Record<string, string> = {
-  Hearing: 'bg-navy-50 text-navy-700 ring-navy-200',
-  Meeting: 'bg-gold-50 text-gold-700 ring-gold-200',
+  Hearing: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  Meeting: 'bg-amber-50 text-amber-700 ring-amber-200',
   Deadline: 'bg-red-50 text-red-700 ring-red-200',
   Other: 'bg-slate-100 text-slate-600 ring-slate-200',
 };
@@ -98,7 +96,15 @@ export default function EventsManager({ selectedCaseId }: Props) {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<number | null>(null);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+
+  // تحديث القضية في النموذج تلقائياً إذا تم اختيار قضية من الأعلى
+  useEffect(() => {
+    if (selectedCaseId) {
+      setForm((prev) => ({ ...prev, case_id: String(selectedCaseId) }));
+    }
+  }, [selectedCaseId]);
 
   async function load() {
     setLoading(true);
@@ -125,7 +131,7 @@ export default function EventsManager({ selectedCaseId }: Props) {
 
   const caseTitle = useMemo(() => {
     if (!selectedCaseId) return null;
-    return cases.find((c) => c.id === selectedCaseId)?.title ?? null;
+    return cases.find((c) => Number(c.id) === Number(selectedCaseId))?.title ?? null;
   }, [selectedCaseId, cases]);
 
   const caseLookup = useMemo(
@@ -140,7 +146,7 @@ export default function EventsManager({ selectedCaseId }: Props) {
 
   const events = useMemo(() => {
     if (!selectedCaseId) return allEvents;
-    return allEvents.filter((e) => e.case_id === selectedCaseId);
+    return allEvents.filter((e) => Number(e.case_id) === Number(selectedCaseId));
   }, [allEvents, selectedCaseId]);
 
   function openCreate() {
@@ -227,261 +233,194 @@ export default function EventsManager({ selectedCaseId }: Props) {
   }
 
   const deleteTarget = allEvents.find((e) => e.id === confirmId) ?? null;
-  const headerLabel = selectedCaseId ? `أحداث — ${caseTitle ?? 'قضية'}` : 'الأحداث';
+  const headerLabel = selectedCaseId ? `أحداث — ${caseTitle ?? 'قضية'}` : 'إدارة الأحداث والجلسات';
   const isFiltered = selectedCaseId !== undefined && selectedCaseId !== null;
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white shadow-card">
-      <div className="flex flex-col gap-3 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
+    <div className="rounded-2xl border-2 border-emerald-300 bg-white p-6 shadow-sm space-y-6 animate-fade-in">
+      <div className="flex flex-col gap-3 border-b border-emerald-100 pb-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors"
+            title={isCollapsed ? "توسيع القسم" : "طي القسم"}
+          >
+            {isCollapsed ? <ChevronDown className="h-5 w-5" /> : <ChevronUp className="h-5 w-5" />}
+          </button>
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-white shadow-sm">
             <Calendar className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-navy-800">{headerLabel}</h2>
-            <p className="text-xs text-slate-400">
-              <span className="nums">{events.length}</span> حدث / جلسة
+            <h2 className="text-xl font-bold text-navy-900 flex items-center gap-2">
+              {headerLabel}
+              {selectedCaseId && (
+                <span className="text-xs bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full font-normal">
+                  (مفلترة للقضية المختارة)
+                </span>
+              )}
+            </h2>
+            <p className="text-xs text-slate-500">
+              <span className="nums">{events.length}</span> حدث / جلسة مسجلة بالنظام
             </p>
           </div>
-          {isFiltered && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-navy-50 px-2 py-0.5 text-xs font-medium text-navy-700">
-              <ArrowRight className="h-3 w-3" />
-              مُصفى حسب القضية
-            </span>
-          )}
         </div>
-        <Button
-          onClick={openCreate}
-          disabled={isFiltered && !selectedCaseId}
-          className="sm:whitespace-nowrap"
-        >
-          <Plus className="h-4 w-4" />
-          إضافة حدث
-        </Button>
+
+        {!isCollapsed && (
+          <Button onClick={openCreate} className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white">
+            <Plus className="h-4 w-4" />
+            إضافة حدث جديد
+          </Button>
+        )}
       </div>
 
-      {isFiltered && !selectedCaseId ? (
-        <EmptyState
-          message="اختر قضية من تبويب القضايا لعرض أحداثها."
-          icon={<Calendar className="h-6 w-6" />}
-        />
-      ) : loading ? (
-        <Spinner label="جارٍ تحميل الأحداث..." />
-      ) : error ? (
-        <div className="p-5">
-          <ErrorBanner message={error} />
-        </div>
-      ) : events.length === 0 ? (
-        <EmptyState
-          message={
-            isFiltered
-              ? 'لا توجد أحداث لهذه القضية بعد. اضغط إضافة حدث لجدولة واحدة.'
-              : 'لا توجد أحداث بعد. ابدأ بإضافة أول حدث.'
-          }
-          icon={<Calendar className="h-6 w-6" />}
-        />
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] text-right text-sm">
-            <thead>
-              <tr className="border-b border-navy-100 bg-navy-50/40 text-xs uppercase tracking-wide text-navy-500">
-                <th className="px-5 py-3 font-semibold">العنوان</th>
-                {!isFiltered && <th className="px-5 py-3 font-semibold">القضية</th>}
-                <th className="px-5 py-3 font-semibold">المحامي</th>
-                <th className="px-5 py-3 font-semibold">النوع</th>
-                <th className="px-5 py-3 font-semibold">التاريخ</th>
-                <th className="px-5 py-3 font-semibold">الوقت</th>
-                <th className="px-5 py-3 font-semibold">الحالة</th>
-                <th className="px-5 py-3 text-left font-semibold">إجراءات</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {events.map((e) => {
-                const today = new Date().toISOString().slice(0, 10);
-                const isPast = e.event_date < today;
-                const isToday = e.event_date === today;
-                return (
-                  <tr key={e.id} className="transition-colors hover:bg-slate-50">
-                    <td className="px-5 py-3">
-                      <span className="font-semibold text-navy-800">{e.title}</span>
-                      {e.location && (
-                        <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-slate-400">
-                          <MapPin className="h-3 w-3" />
-                          {e.location}
-                        </span>
-                      )}
-                    </td>
-                    {!isFiltered && (
-                      <td className="px-5 py-3 text-slate-600">
-                        {caseLookup[e.case_id] ?? '—'}
-                      </td>
+      {!isCollapsed && (
+        <div className="space-y-6 animate-fade-in">
+          {error && <ErrorBanner message={error} />}
+
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Spinner />
+            </div>
+          ) : events.length === 0 ? (
+            <EmptyState
+              icon={Calendar}
+              title="لا توجد أحداث"
+              description={isFiltered ? 'لا توجد أحداث مرتبطة بهذه القضية المحددة.' : 'لم يتم تسجيل أي أحداث أو جلسات بعد.'}
+              action={
+                <Button variant="secondary" onClick={openCreate}>
+                  إضافة حدث جديد
+                </Button>
+              }
+            />
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {events.map((ev) => (
+                <div
+                  key={ev.id}
+                  className="group relative flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-slate-50/50 p-5 shadow-sm transition-all hover:border-emerald-400 hover:bg-white hover:shadow-md"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${EVENT_TYPE_STYLES[ev.event_type] ?? 'bg-slate-100 text-slate-600'}`}>
+                        {EVENT_TYPE_LABELS[ev.event_type] ?? ev.event_type}
+                      </span>
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${STATUS_STYLES[ev.status] ?? 'bg-slate-100 text-slate-600'}`}>
+                        {STATUS_LABELS[ev.status] ?? ev.status}
+                      </span>
+                    </div>
+
+                    <h3 className="font-bold text-navy-900 text-base mb-1 group-hover:text-emerald-700 transition-colors">
+                      {ev.title}
+                    </h3>
+
+                    {ev.case_id && caseLookup[ev.case_id] && (
+                      <p className="text-xs font-medium text-slate-500 mb-3 flex items-center gap-1.5">
+                        <Gavel className="h-3.5 w-3.5 text-amber-600" />
+                        {caseLookup[ev.case_id]}
+                      </p>
                     )}
-                    <td className="px-5 py-3 text-slate-600">
-                      {e.lawyer_id ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          <Gavel className="h-3.5 w-3.5 text-slate-400" />
-                          {lawyerLookup[e.lawyer_id] ?? '—'}
-                        </span>
-                      ) : (
-                        <span className="text-slate-300">—</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3">
-                      <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${
-                          EVENT_TYPE_STYLES[e.event_type] ?? EVENT_TYPE_STYLES.Other
-                        }`}
-                      >
-                        {EVENT_TYPE_LABELS[e.event_type] ?? e.event_type}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3">
-                      <span className="inline-flex items-center gap-1.5 text-slate-600">
-                        <span className="nums">
-                          {new Date(e.event_date + 'T00:00:00').toLocaleDateString('ar-EG')}
-                        </span>
-                        {isToday && (
-                          <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-600 ring-1 ring-emerald-200">
-                            اليوم
-                          </span>
+
+                    <div className="space-y-1.5 text-xs text-slate-600 mb-4 border-t border-slate-200/60 pt-3">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                        <span className="nums font-medium">{ev.event_date}</span>
+                        {ev.event_time && (
+                          <>
+                            <span className="text-slate-300">|</span>
+                            <Clock className="h-3.5 w-3.5 text-slate-400" />
+                            <span className="nums font-medium">{ev.event_time}</span>
+                          </>
                         )}
-                        {isPast && e.status === 'Scheduled' && (
-                          <AlertCircle className="h-3.5 w-3.5 text-slate-300" />
-                        )}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-slate-600">
-                      {e.event_time ? (
-                        <span className="inline-flex items-center gap-1.5 nums">
-                          <Clock className="h-3.5 w-3.5 text-slate-400" />
-                          {e.event_time.slice(0, 5)}
-                        </span>
-                      ) : (
-                        <span className="text-slate-300">—</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3">
-                      <span
-                        className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${
-                          STATUS_STYLES[e.status] ?? STATUS_STYLES.Scheduled
-                        }`}
-                      >
-                        {STATUS_LABELS[e.status] ?? e.status}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => openEdit(e)}
-                          className="inline-flex items-center justify-center rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-navy-50 hover:text-navy-600"
-                          aria-label={`تعديل ${e.title}`}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => setConfirmId(e.id)}
-                          className="inline-flex items-center justify-center rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
-                          aria-label={`حذف ${e.title}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
                       </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+
+                      {ev.location && (
+                        <div className="flex items-center gap-2 text-slate-500">
+                          <MapPin className="h-3.5 w-3.5 text-slate-400" />
+                          <span>{ev.location}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-slate-200/60 pt-3 mt-2">
+                    <span className="text-[11px] text-slate-400">
+                      {ev.lawyer_id ? lawyerLookup[ev.lawyer_id] : ''}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => openEdit(ev)}
+                        className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-navy-600 transition-colors"
+                        title="تعديل"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => setConfirmId(ev.id)}
+                        className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                        title="حذف"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
+      {/* نافذة إضافة / تعديل الحدث */}
       <Modal
-        open={modalOpen}
-        title={editing ? 'تعديل بيانات الحدث' : 'إضافة حدث جديد'}
-        subtitle={editing ? editing.title : 'جدولة جلسة أو موعد قانوني جديد'}
+        isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
+        title={editing ? 'تعديل الحدث / الجلسة' : 'إضافة حدث أو جلسة جديدة'}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           {formError && <ErrorBanner message={formError} />}
-          <Field label="القضية *">
+
+          <Field label="القضية المرتبطة *" required>
             <select
               className={inputClass}
               value={form.case_id}
               onChange={(e) => setForm({ ...form, case_id: e.target.value })}
               required
             >
-              <option value="">اختر قضية...</option>
+              <option value="">-- اختر القضية --</option>
               {cases.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.title}
+                  {c.case_number} - {c.title}
                 </option>
               ))}
             </select>
           </Field>
-          <Field label="عنوان الحدث *">
+
+          <Field label="عنوان الحدث أو الجلسة *" required>
             <input
+              type="text"
               className={inputClass}
+              placeholder="مثال: جلسة المرافعة الرئيسية"
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
-              placeholder="مثال: جلسة محكمة — طلب رفض"
               required
             />
           </Field>
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="المحامي المسؤول">
-              <select
-                className={inputClass}
-                value={form.lawyer_id}
-                onChange={(e) => setForm({ ...form, lawyer_id: e.target.value })}
-              >
-                <option value="">بدون تعيين...</option>
-                {lawyers.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
             <Field label="نوع الحدث">
               <select
                 className={inputClass}
                 value={form.event_type}
                 onChange={(e) => setForm({ ...form, event_type: e.target.value })}
               >
-                <option value="Hearing">جلسة</option>
-                <option value="Meeting">اجتماع</option>
-                <option value="Deadline">موعد نهائي</option>
+                <option value="Hearing">جلسة محكمة</option>
+                <option value="Meeting">اجتماع مع موكل</option>
+                <option value="Deadline">موعد نهائي / تسليم</option>
                 <option value="Other">أخرى</option>
               </select>
             </Field>
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="تاريخ الحدث *">
-              <DateInput
-                value={form.event_date}
-                onChange={(v) => setForm({ ...form, event_date: v })}
-                required
-              />
-            </Field>
-            <Field label="وقت الحدث">
-              <input
-                type="time"
-                className={inputClass}
-                value={form.event_time}
-                onChange={(e) => setForm({ ...form, event_time: e.target.value })}
-              />
-            </Field>
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="الموقع">
-              <input
-                className={inputClass}
-                value={form.location}
-                onChange={(e) => setForm({ ...form, location: e.target.value })}
-                placeholder="مثال: المحكمة العليا، القاعة ٤ب"
-              />
-            </Field>
-            <Field label="الحالة">
+
+            <Field label="حالة الحدث">
               <select
                 className={inputClass}
                 value={form.status}
@@ -493,30 +432,81 @@ export default function EventsManager({ selectedCaseId }: Props) {
               </select>
             </Field>
           </div>
-          <Field label="ملاحظات">
-            <Textarea
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              placeholder="تفاصيل اختيارية عن الحدث..."
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="تاريخ الحدث *" required>
+              <input
+                type="date"
+                className={inputClass}
+                value={form.event_date}
+                onChange={(e) => setForm({ ...form, event_date: e.target.value })}
+                required
+              />
+            </Field>
+
+            <Field label="وقت الحدث">
+              <input
+                type="time"
+                className={inputClass}
+                value={form.event_time}
+                onChange={(e) => setForm({ ...form, event_time: e.target.value })}
+              />
+            </Field>
+          </div>
+
+          <Field label="المكان / المحكمة">
+            <input
+              type="text"
+              className={inputClass}
+              placeholder="مثال: محكمة أسوان الابتدائية - الدائرة الأولى"
+              value={form.location}
+              onChange={(e) => setForm({ ...form, location: e.target.value })}
             />
           </Field>
-          <div className="flex justify-start gap-2 pt-2">
+
+          <Field label="المحامي المسؤول">
+            <select
+              className={inputClass}
+              value={form.lawyer_id}
+              onChange={(e) => setForm({ ...form, lawyer_id: e.target.value })}
+            >
+              <option value="">-- اختر المحامي --</option>
+              {lawyers.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="ملاحظات تفصيلية">
+            <textarea
+              className={inputClass}
+              rows={3}
+              placeholder="أي تفاصيل أو طلبات خاصة بالحدث..."
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            />
+          </Field>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
             <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>
               إلغاء
             </Button>
             <Button type="submit" disabled={saving}>
-              {saving ? 'جارٍ الحفظ...' : editing ? 'حفظ التعديلات' : 'حفظ الحدث'}
+              {saving ? 'جاري الحفظ...' : 'حفظ الحدث'}
             </Button>
           </div>
         </form>
       </Modal>
 
+      {/* تأكيد الحذف */}
       <ConfirmDialog
-        open={confirmId !== null}
-        title="حذف الحدث"
-        message={`هل تريد حذف الحدث «${deleteTarget?.title}» نهائياً؟`}
+        isOpen={confirmId !== null}
+        title="تأكيد الحذف"
+        message={`هل أنت متأكد من حذف الحدث "${deleteTarget?.title ?? ''}"؟`}
         onConfirm={() => confirmId !== null && handleDelete(confirmId)}
-        onCancel={() => setConfirmId(null)}
+        onClose={() => setConfirmId(null)}
       />
     </div>
   );

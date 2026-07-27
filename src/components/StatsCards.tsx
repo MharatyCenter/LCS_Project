@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Users, Briefcase, CalendarDays, Gavel } from 'lucide-react';
+import { Users, Briefcase, CalendarDays, Gavel, TrendingUp } from 'lucide-react';
 import { onRefresh } from '../utils/refreshUtils';
-import * as clientsService from '../Services/clientsService'; // 💡 استيراد آمن لتفادي خطأ الاسم النمطي
+import * as clientsService from '../Services/clientsService';
 import { getCases } from '../Services/casesService';
 import { getEvents } from '../Services/eventsService';
 import { getLawyers } from '../Services/lawyersService';
@@ -10,9 +10,11 @@ type Stat = {
   label: string;
   value: number;
   icon: React.ReactNode;
-  gradient: string;
-  iconColor: string;
-  trend: string;
+  iconClass: string; // فئة CSS للأيقونة
+  trendColor: string; // لون النص الثانوي
+  bgColor: string; // لون خلفية البطاقة
+  borderColor: string; // لون الحدود
+  ringColor: string; // لون الحلقة حول الأيقونة
 };
 
 function todayStr() {
@@ -30,7 +32,6 @@ export default function StatsCards() {
     try {
       const lawyerId = localStorage.getItem('lawyer_id') || '';
 
-      // 💡 فحص ديناميكي لاسم الدالة المصدرة في ملف العملاء لتجنب انهيار التطبيق
       const fetchClientsFn = 
         (clientsService as any).getClients || 
         (clientsService as any).getClientsByLawyer || 
@@ -67,63 +68,83 @@ export default function StatsCards() {
     return onRefresh(() => load());
   }, []);
 
+  // 💡 تم تحديث البيانات لتشمل كلاسات الألوان المبهرة
   const stats: Stat[] = [
     {
       label: 'إجمالي العملاء',
       value: counts.clients,
-      icon: <Users className="h-5 w-5" />,
-      gradient: 'from-navy-600 to-navy-800',
-      iconColor: 'text-gold-300',
-      trend: 'عميل مسجّل',
+      icon: <Users className="h-6 w-6" />,
+      iconClass: 'text-cyan-600',
+      trendColor: 'text-cyan-900',
+      bgColor: 'bg-cyan-50',
+      borderColor: 'border-cyan-100',
+      ringColor: 'ring-cyan-100',
     },
     {
       label: 'القضايا النشطة',
       value: counts.openCases,
-      icon: <Briefcase className="h-5 w-5" />,
-      gradient: 'from-gold-500 to-gold-700',
-      iconColor: 'text-white',
-      trend: `من ${counts.cases} قضية`,
+      icon: <Briefcase className="h-6 w-6" />,
+      iconClass: 'text-amber-600',
+      trendColor: 'text-amber-900',
+      bgColor: 'bg-amber-50',
+      borderColor: 'border-amber-100',
+      ringColor: 'ring-amber-100',
     },
     {
       label: 'أحداث اليوم',
       value: counts.eventsToday,
-      icon: <CalendarDays className="h-5 w-5" />,
-      gradient: 'from-emerald-500 to-emerald-700',
-      iconColor: 'text-white',
-      trend: 'جلسة / موعد',
+      icon: <CalendarDays className="h-6 w-6" />,
+      iconClass: 'text-lime-600',
+      trendColor: 'text-lime-900',
+      bgColor: 'bg-lime-50',
+      borderColor: 'border-lime-100',
+      ringColor: 'ring-lime-100',
     },
     {
       label: 'المحامون النشطون',
       value: counts.lawyers,
-      icon: <Gavel className="h-5 w-5" />,
-      gradient: 'from-slate-600 to-slate-800',
-      iconColor: 'text-gold-300',
-      trend: 'محامٍ في المكتب',
+      icon: <Gavel className="h-6 w-6" />,
+      iconClass: 'text-purple-600',
+      trendColor: 'text-purple-900',
+      bgColor: 'bg-purple-50',
+      borderColor: 'border-purple-100',
+      ringColor: 'ring-purple-100',
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
       {stats.map((s, i) => (
         <div
           key={s.label}
-          className={`group relative overflow-hidden rounded-2xl bg-gradient-to-br ${s.gradient} p-5 shadow-card transition-all hover:-translate-y-1 hover:shadow-card-hover animate-slide-up`}
+          // 💡 دمج الألوان المبهرة في الخلفية والحدود
+          className={`group relative overflow-hidden rounded-3xl border ${s.borderColor} ${s.bgColor} p-6 shadow-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-xl animate-slide-up`}
           style={{ animationDelay: `${i * 60}ms` }}
         >
-          <div className="pointer-events-none absolute -top-8 -left-8 h-24 w-24 rounded-full bg-white/10 blur-2xl transition-opacity group-hover:opacity-100" />
+          {/* لمسة بصرية خفيفة في الخلفية */}
+          <div className={`absolute -right-10 -top-10 h-32 w-32 rounded-full opacity-20 ${s.iconClass.replace('text-','bg-')} pointer-events-none transition-transform group-hover:scale-125`} />
 
           <div className="relative flex items-start justify-between">
             <div>
-              <p className="text-sm font-medium text-white/80">{s.label}</p>
-              <p className="mt-2 text-3xl font-bold tracking-tight text-white nums">
-                {loading ? <span className="text-white/50">—</span> : s.value}
+              <p className={`text-sm font-semibold ${s.trendColor} opacity-80`}>{s.label}</p>
+              <p className={`mt-3 text-4xl font-extrabold tracking-tighter ${s.iconClass.replace('text-','text-')} nums`}>
+                {loading ? <span className="opacity-50">—</span> : s.value}
               </p>
-              <p className="mt-1 text-xs text-white/70">{s.trend}</p>
+              <div className="mt-2 flex items-center gap-1.5">
+                <span className={`text-xs font-medium ${s.trendColor}`}>
+                  {s.label === 'القضايا النشطة' ? `من ${counts.cases} قضية` : 
+                   s.label === 'إجمالي العملاء' ? 'عميل مسجّل' : 
+                   s.label === 'أحداث اليوم' ? 'جلسة / موعد' : 
+                   'محامٍ في المكتب'}
+                </span>
+                <TrendingUp className={`h-3.5 w-3.5 ${s.iconClass} opacity-0 transition-opacity group-hover:opacity-100`} />
+              </div>
             </div>
-            <div
-              className={`flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm ${s.iconColor} transition-transform group-hover:scale-110`}
-            >
-              {s.icon}
+            
+            <div className={`flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-inner ring-4 ${s.ringColor} transition-transform duration-300 group-hover:scale-105`}>
+              <div className={`${s.iconClass}`}>
+                {s.icon}
+              </div>
             </div>
           </div>
         </div>
