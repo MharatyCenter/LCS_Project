@@ -23,3 +23,19 @@ export type Lawyer = {
   bar_number: string | null;
   status: string;
 };
+
+// 🔍 دالة اختبار الاتصال الفعلي للتأكد من سلامة الربط بالـ public schema
+export async function testDatabaseConnection(): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('lawyers')
+    .select('id')
+    .limit(1);
+
+  if (error) {
+    console.error('❌ فشل الاتصال بقاعدة البيانات:', error.message);
+    return false;
+  } else {
+    console.log('✅ تم الاتصال بنجاح بقاعدة البيانات والبيانات العائدة:', data);
+    return true;
+  }
+}

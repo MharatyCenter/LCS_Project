@@ -1,20 +1,51 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '../Services/supabaseClient';
 import { Plus, Search, Edit2, Trash2, Users, ChevronDown, ChevronUp } from 'lucide-react';
-import { onRefresh, triggerRefresh } from '../utils/refreshUtils';
-import * as clientsService from '../Services/clientsService';
 
-interface ClientsManagerProps {
-  onSelect?: (id: number | null) => void;
-  selectedClientId?: number | null;
-}
+type CalendarEvent = {
+  id: number;
+  title: string;
+  event_date: string;
+  event_time?: string;
+  client_name?: string;
+};
 
-export default function ClientsManager({ onSelect, selectedClientId }: ClientsManagerProps) {
-  const [clients, setClients] = useState<clientsService.Client[]>([]);
-  const [loading, setLoading] = useState(true);
+type Client = {
+  id: number;
+  client_code?: number;
+  client_name: string;
+  contract_date?: string;
+  power_of_attorney_type?: string;
+  power_of_attorney_number?: string;
+  power_of_attorney_date?: string;
+  client_type?: string;
+  phone?: string;
+  sector?: string;
+  entity?: string;
+  notes?: string;
+};
+
+export default function DashboardContent() {
+  const [stats, setStats] = useState({
+    lawyersCount: 0,
+    clientsCount: 0,
+    casesCount: 0,
+    eventsCount: 0,
+    loading: true,
+  });
+
+  const [todayEvents, setTodayEvents] = useState<CalendarEvent[]>([]);
+  const [tomorrowEvents, setTomorrowEvents] = useState<CalendarEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+
+  // حالات إدارة الموكلين المدمجة بدقة
+  const [clients, setClients] = useState<Client[]>([]);
+  const [clientsLoading, setClientsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingClient, setEditingClient] = useState<clientsService.Client | null>(null);
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
 
   const [formData, setFormData] = useState({
     client_name: '',
@@ -29,27 +60,75 @@ export default function ClientsManager({ onSelect, selectedClientId }: ClientsMa
     notes: '',
   });
 
-  async function loadClients() {
+  // دالة جلب الموكلين وباقي الإحصائيات
+  async function loadDashboardData() {
     try {
-      setLoading(true);
-      const data = await clientsService.getClients();
-      setClients(data);
-    } catch (error) {
-      console.error('Failed to load clients:', error);
+      setClientsLoading(true);
+
+      // 1. جلب المحامين
+      const { count: lawyersCnt } = await supabase
+        .from('lawyers')
+        .select('*', { count: 'exact', head: true });
+
+      // 2. جلب الموكلين
+      const { data: clientsData, count: clientsCnt, error: clientsError } = await supabase
+        .from('clients')
+        .select('*', { count: 'exact' });
+
+      if (!clientsError && clientsData) {
+        setClients(clientsData);
+      }
+
+      // 3. جلب القضايا
+      const { count: casesCnt } = await supabase
+        .from('cases')
+        .select('*', { count: 'exact', head: true });
+
+      // 4. جلب الأحداث
+      const { count: eventsCnt } = await supabase
+        .from('events')
+        .select('*', { count: 'exact', head: true });
+
+      setStats({
+        lawyersCount: lawyersCnt || 0,
+        clientsCount: clientsCnt || clientsData?.length || 0,
+        casesCount: casesCnt || 0,
+        eventsCount: eventsCnt || 0,
+        loading: false,
+      });
+
+      // جلب أحداث اليوم والغد
+      const todayStr = new Date().toISOString().split('T')[0];
+      const tomorrowDate = new Date();
+      tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+      const tomorrowStr = tomorrowDate.toISOString().split('T')[0];
+
+      const { data: eventsData, error: eventsError } = await supabase
+        .from('events')
+        .select('*')
+        .in('event_date', [todayStr, tomorrowStr]);
+
+      if (!eventsError && eventsData) {
+        setTodayEvents(eventsData.filter(ev => ev.event_date === todayStr));
+        setTomorrowEvents(eventsData.filter(ev => ev.event_date === tomorrowStr));
+      }
+    } catch (err) {
+      console.error('خطأ في جلب بيانات لوحة التحكم:', err);
     } finally {
-      setLoading(false);
+      setClientsLoading(false);
+      setEventsLoading(false);
     }
   }
 
   useEffect(() => {
-    loadClients();
-    return onRefresh(() => loadClients());
+    loadDashboardData();
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // حفظ أو تعديل موكل
+  const handleClientSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const clientData = { 
+      const clientPayload = { 
         client_name: formData.client_name,
         contract_date: formData.contract_date || null,
         power_of_attorney_type: formData.power_of_attorney_type || null,
@@ -63,9 +142,19 @@ export default function ClientsManager({ onSelect, selectedClientId }: ClientsMa
       };
 
       if (editingClient) {
-        await clientsService.updateClient(editingClient.id, clientData);
+        const targetId = editingClient.client_code || editingClient.id;
+        const { error } = await supabase
+          .from('clients')
+          .update(clientPayload)
+          .eq(editingClient.client_code ? 'client_code' : 'id', targetId);
+
+        if (error) throw error;
       } else {
-        await clientsService.createClient(clientData);
+        const { error } = await supabase
+          .from('clients')
+          .insert([clientPayload]);
+
+        if (error) throw error;
       }
 
       setIsModalOpen(false);
@@ -83,16 +172,14 @@ export default function ClientsManager({ onSelect, selectedClientId }: ClientsMa
         notes: '',
       });
       
-      loadClients();
-      triggerRefresh();
+      loadDashboardData();
     } catch (error: any) {
-      console.error('Detailed Save Error:', error);
-      const errorMsg = error?.message || error?.details || JSON.stringify(error);
-      alert(`فشل الحفظ بسبب خطأ من قاعدة البيانات:\n${errorMsg}`);
+      console.error('خطأ في الحفظ:', error);
+      alert(`فشل الحفظ بسبب خطأ من قاعدة البيانات:\n${error?.message || JSON.stringify(error)}`);
     }
   };
 
-  const handleEdit = (client: any, e: React.MouseEvent) => {
+  const handleEditClient = (client: Client, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingClient(client);
     setFormData({
@@ -110,144 +197,291 @@ export default function ClientsManager({ onSelect, selectedClientId }: ClientsMa
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (id: any, e: React.MouseEvent) => {
+  const handleDeleteClient = async (client: Client, e: React.MouseEvent) => {
     e.stopPropagation();
     if (window.confirm('هل أنت متأكد من حذف هذا الموكل نهائياً؟')) {
       try {
-        await clientsService.deleteClient(id);
-        loadClients();
-        triggerRefresh();
+        const targetId = client.client_code || client.id;
+        const { error } = await supabase
+          .from('clients')
+          .delete()
+          .eq(client.client_code ? 'client_code' : 'id', targetId);
+
+        if (error) throw error;
+        loadDashboardData();
       } catch (error) {
-        console.error('Failed to delete client:', error);
+        console.error('فشل الحذف:', error);
       }
     }
   };
 
+  // فلترة الموكلين مع حماية تامة ضد أي قيم فارغة (لضمان عدم ظهور خطأ toLowerCase)
   const filteredClients = clients.filter(client => {
-    const nameMatch = client.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) || false;
-    const phoneMatch = client.phone?.includes(searchTerm) || false;
-    const poaMatch = client.power_of_attorney_number?.includes(searchTerm) || false;
+    const nameMatch = client.client_name ? client.client_name.toLowerCase().includes(searchTerm.toLowerCase()) : false;
+    const phoneMatch = client.phone ? client.phone.includes(searchTerm) : false;
+    const poaMatch = client.power_of_attorney_number ? client.power_of_attorney_number.includes(searchTerm) : false;
     return nameMatch || phoneMatch || poaMatch;
   });
 
+  const lawyerName = localStorage.getItem('lawyer_name') || 'الأستاذ المحامي';
+
   return (
-    <div className="rounded-2xl border-2 border-cyan-300 bg-white p-6 shadow-sm space-y-6 animate-fade-in">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-cyan-100 pb-4">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-100 text-cyan-700 hover:bg-cyan-200 transition-colors"
-            title={isCollapsed ? "توسيع القسم" : "طي القسم"}
-          >
-            {isCollapsed ? <ChevronDown className="h-5 w-5" /> : <ChevronUp className="h-5 w-5" />}
-          </button>
+    <div style={{
+      minHeight: '100vh',
+      backgroundColor: '#0f172a',
+      color: '#ffffff',
+      fontFamily: 'Cairo, Tahoma, sans-serif',
+      direction: 'rtl',
+      padding: '24px'
+    }}>
+      {/* الهيدر */}
+      <header style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: '#1e293b',
+        padding: '20px 30px',
+        borderRadius: '16px',
+        border: '1px solid #334155',
+        marginBottom: '24px',
+        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+          <div style={{
+            width: '45px',
+            height: '45px',
+            borderRadius: '12px',
+            backgroundColor: '#3b82f6',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            fontSize: '22px'
+          }}>
+            ⚖️
+          </div>
           <div>
-            <h2 className="text-xl font-bold text-navy-900 flex items-center gap-2">
-              <Users className="h-5 w-5 text-cyan-600" />
-              إدارة الموكلين
-            </h2>
-            <p className="mt-1 text-xs text-slate-500">اضغط على أي موكل لتصفية القضايا الخاصة به في الأسفل.</p>
+            <h1 style={{ fontSize: '20px', fontWeight: 'bold', margin: 0, color: '#f8fafc' }}>
+              نظام إدارة المكتب القانوني
+            </h1>
+            <p style={{ fontSize: '13px', color: '#94a3b8', margin: '4px 0 0 0' }}>
+              مرحباً بك، <span style={{ color: '#38bdf8', fontWeight: 'bold' }}>{lawyerName}</span>
+            </p>
           </div>
         </div>
-        
-        {!isCollapsed && (
-          <button
-            onClick={() => {
-              setEditingClient(null);
-              setFormData({
-                client_name: '',
-                contract_date: '',
-                power_of_attorney_type: 'توكيل عام',
-                power_of_attorney_number: '',
-                power_of_attorney_date: '',
-                client_type: 'فردي',
-                phone: '',
-                sector: 'خاص',
-                entity: '',
-                notes: '',
-              });
-              setIsModalOpen(true);
+
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button 
+            onClick={() => window.location.reload()}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#334155',
+              color: '#f8fafc',
+              border: '1px solid #475569',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontWeight: 'bold'
             }}
-            className="flex items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-cyan-700 transition-colors"
           >
-            <Plus className="h-4 w-4" />
-            إضافة موكل جديد
+            🔄 تحديث البيانات
           </button>
-        )}
+          <button 
+            onClick={() => {
+              localStorage.removeItem('lawyer_name');
+              window.location.reload();
+            }}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#7f1d1d',
+              color: '#fca5a5',
+              border: '1px solid #991b1b',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontWeight: 'bold'
+            }}
+          >
+            تسجيل الخروج
+          </button>
+        </div>
+      </header>
+
+      {/* العدادات الأربعة الرئيسية */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+        gap: '20px',
+        marginBottom: '24px'
+      }}>
+        <div style={{ backgroundColor: '#1e293b', padding: '20px', borderRadius: '16px', border: '1px solid #334155' }}>
+          <h3 style={{ color: '#94a3b8', fontSize: '13px', margin: '0 0 8px 0' }}>👥 عدد الموكلين</h3>
+          <p style={{ fontSize: '28px', fontWeight: 'bold', color: '#38bdf8', margin: 0 }}>
+            {stats.loading ? '...' : stats.clientsCount}
+          </p>
+        </div>
+
+        <div style={{ backgroundColor: '#1e293b', padding: '20px', borderRadius: '16px', border: '1px solid #334155' }}>
+          <h3 style={{ color: '#94a3b8', fontSize: '13px', margin: '0 0 8px 0' }}>📂 عدد القضايا</h3>
+          <p style={{ fontSize: '28px', fontWeight: 'bold', color: '#38bdf8', margin: 0 }}>
+            {stats.loading ? '...' : stats.casesCount}
+          </p>
+        </div>
+
+        <div style={{ backgroundColor: '#1e293b', padding: '20px', borderRadius: '16px', border: '1px solid #334155' }}>
+          <h3 style={{ color: '#94a3b8', fontSize: '13px', margin: '0 0 8px 0' }}>📅 إجمالي الأحداث</h3>
+          <p style={{ fontSize: '28px', fontWeight: 'bold', color: '#38bdf8', margin: 0 }}>
+            {stats.loading ? '...' : stats.eventsCount}
+          </p>
+        </div>
+
+        <div style={{ backgroundColor: '#1e293b', padding: '20px', borderRadius: '16px', border: '1px solid #334155' }}>
+          <h3 style={{ color: '#94a3b8', fontSize: '13px', margin: '0 0 8px 0' }}>⭐ أحداث اليوم</h3>
+          <p style={{ fontSize: '28px', fontWeight: 'bold', color: '#10b981', margin: 0 }}>
+            {eventsLoading ? '...' : todayEvents.length}
+          </p>
+        </div>
       </div>
 
-      {!isCollapsed && (
-        <div className="space-y-6 animate-fade-in">
-          <div className="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-2.5 shadow-inner border border-slate-200">
-            <Search className="h-5 w-5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="بحث باسم الموكل، رقم الهاتف، أو رقم التوكيل..."
-              className="w-full bg-transparent text-sm text-slate-800 placeholder-slate-400 focus:outline-none"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+      {/* قسم إدارة الموكلين المدمج (نفس تصميمك الأصلي بتوافق تام) */}
+      <div style={{
+        backgroundColor: '#1e293b',
+        borderRadius: '16px',
+        border: '1px solid #334155',
+        padding: '24px',
+        marginBottom: '24px'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #334155', paddingBottom: '15px', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              style={{
+                background: '#334155',
+                border: 'none',
+                color: '#38bdf8',
+                borderRadius: '8px',
+                width: '35px',
+                height: '35px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              title={isCollapsed ? "توسيع القسم" : "طي القسم"}
+            >
+              {isCollapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+            </button>
+            <div>
+              <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#f8fafc', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Users size={20} color="#38bdf8" /> إدارة الموكلين
+              </h2>
+              <p style={{ fontSize: '12px', color: '#94a3b8', margin: '3px 0 0 0' }}>اضغط على أي موكل لتحديد أو تصفية قضاياه.</p>
+            </div>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-right text-sm text-slate-600">
-                <thead className="bg-slate-50 text-xs font-semibold text-slate-700 uppercase">
-                  <tr>
-                    <th className="px-6 py-4">اسم الموكل</th>
-                    <th className="px-6 py-4">الهاتف / التوكيل</th>
-                    <th className="px-6 py-4">نوع الموكل</th>
-                    <th className="px-6 py-4">القطاع والجهة</th>
-                    <th className="px-6 py-4 text-left">إجراءات</th>
+          {!isCollapsed && (
+            <button
+              onClick={() => {
+                setEditingClient(null);
+                setFormData({
+                  client_name: '',
+                  contract_date: '',
+                  power_of_attorney_type: 'توكيل عام',
+                  power_of_attorney_number: '',
+                  power_of_attorney_date: '',
+                  client_type: 'فردي',
+                  phone: '',
+                  sector: 'خاص',
+                  entity: '',
+                  notes: '',
+                });
+                setIsModalOpen(true);
+              }}
+              style={{
+                backgroundColor: '#0284c7',
+                color: '#ffffff',
+                border: 'none',
+                padding: '10px 16px',
+                borderRadius: '8px',
+                fontWeight: 'bold',
+                fontSize: '13px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <Plus size={16} /> إضافة موكل جديد
+            </button>
+          )}
+        </div>
+
+        {!isCollapsed && (
+          <div>
+            {/* شريط البحث */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#0f172a', padding: '10px 15px', borderRadius: '8px', border: '1px solid #334155', marginBottom: '20px' }}>
+              <Search size={18} color="#94a3b8" />
+              <input
+                type="text"
+                placeholder="بحث باسم الموكل، رقم الهاتف، أو رقم التوكيل..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{ background: 'transparent', border: 'none', color: '#ffffff', width: '100%', outline: 'none', fontSize: '14px' }}
+              />
+            </div>
+
+            {/* جدول الموكلين */}
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right', fontSize: '14px' }}>
+                <thead>
+                  <tr style={{ background: '#0f172a', color: '#94a3b8', borderBottom: '1px solid #334155' }}>
+                    <th style={{ padding: '12px' }}>اسم الموكل</th>
+                    <th style={{ padding: '12px' }}>الهاتف / التوكيل</th>
+                    <th style={{ padding: '12px' }}>نوع الموكل</th>
+                    <th style={{ padding: '12px' }}>القطاع والجهة</th>
+                    <th style={{ padding: '12px', textAlign: 'left' }}>إجراءات</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {loading ? (
+                <tbody>
+                  {clientsLoading ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-10 text-center text-slate-400">جاري تحميل البيانات...</td>
+                      <td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: '#94a3b8' }}>جاري تحميل الموكلين...</td>
                     </tr>
                   ) : filteredClients.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-10 text-center text-slate-400">لا يوجد موكلون مسجلون حالياً.</td>
+                      <td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>لا توجد موكلين مسجلين حالياً.</td>
                     </tr>
                   ) : (
-                    filteredClients.map((client: any) => {
-                      const isSelected = selectedClientId === client.client_code;
+                    filteredClients.map((client) => {
+                      const clientIdKey = client.client_code || client.id;
+                      const isSelected = selectedClientId === clientIdKey;
                       return (
-                        <tr 
-                          key={client.client_code} 
-                          onClick={() => onSelect && onSelect(isSelected ? null : client.client_code)}
-                          className={`cursor-pointer transition-colors ${
-                            isSelected ? 'bg-cyan-50/80 border-r-4 border-cyan-600' : 'hover:bg-slate-50/70'
-                          }`}
-                          title="اضغط لتصفية القضايا الخاصة بهذا الموكل"
+                        <tr
+                          key={clientIdKey}
+                          onClick={() => setSelectedClientId(isSelected ? null : clientIdKey)}
+                          style={{
+                            background: isSelected ? '#334155' : 'transparent',
+                            borderBottom: '1px solid #334155',
+                            cursor: 'pointer'
+                          }}
                         >
-                          <td className="px-6 py-4 font-medium text-navy-950 flex items-center gap-2">
+                          <td style={{ padding: '12px', color: '#f8fafc', fontWeight: 'bold' }}>
                             {client.client_name}
-                            {isSelected && (
-                              <span className="text-[10px] bg-cyan-600 text-white px-2 py-0.5 rounded-full">معروض حالياً</span>
-                            )}
+                            {isSelected && <span style={{ fontSize: '10px', background: '#0284c7', color: '#fff', padding: '2px 6px', borderRadius: '4px', marginRight: '8px' }}>معروض</span>}
                           </td>
-                          <td className="px-6 py-4">
-                            <div className="font-medium text-slate-800">{client.phone || '—'}</div>
-                            <div className="text-xs text-slate-400">{client.power_of_attorney_type}: {client.power_of_attorney_number || 'بدون رقم'}</div>
+                          <td style={{ padding: '12px', color: '#cbd5e1' }}>
+                            <div>{client.phone || '—'}</div>
+                            <div style={{ fontSize: '11px', color: '#94a3b8' }}>{client.power_of_attorney_type}: {client.power_of_attorney_number || 'بدون'}</div>
                           </td>
-                          <td className="px-6 py-4">
-                            <span className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-cyan-50 text-cyan-700">
-                              {client.client_type}
-                            </span>
+                          <td style={{ padding: '12px', color: '#38bdf8' }}>{client.client_type}</td>
+                          <td style={{ padding: '12px', color: '#cbd5e1' }}>
+                            <div>{client.sector}</div>
+                            <div style={{ fontSize: '11px', color: '#94a3b8' }}>{client.entity || '—'}</div>
                           </td>
-                          <td className="px-6 py-4">
-                            <div className="text-slate-800 font-medium">{client.sector}</div>
-                            <div className="text-xs text-slate-400">{client.entity || '—'}</div>
-                          </td>
-                          <td className="px-6 py-4 text-left">
-                            <div className="flex justify-end gap-2">
-                              <button onClick={(e) => handleEdit(client, e)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-navy-600 transition-colors">
-                                <Edit2 className="h-4 w-4" />
+                          <td style={{ padding: '12px', textAlign: 'left' }}>
+                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                              <button onClick={(e) => handleEditClient(client, e)} style={{ background: 'transparent', border: 'none', color: '#38bdf8', cursor: 'pointer' }} title="تعديل">
+                                <Edit2 size={16} />
                               </button>
-                              <button onClick={(e) => handleDelete(client.client_code, e)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-rose-600 transition-colors">
-                                <Trash2 className="h-4 w-4" />
+                              <button onClick={(e) => handleDeleteClient(client, e)} style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer' }} title="حذف">
+                                <Trash2 size={16} />
                               </button>
                             </div>
                           </td>
@@ -259,43 +493,107 @@ export default function ClientsManager({ onSelect, selectedClientId }: ClientsMa
               </table>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
+      {/* قسم تفاصيل أحداث اليوم والغد */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+        gap: '20px'
+      }}>
+        {/* أحداث اليوم */}
+        <div style={{ backgroundColor: '#1e293b', padding: '24px', borderRadius: '16px', border: '1px solid #334155' }}>
+          <div style={{ marginBottom: '15px', borderBottom: '1px solid #334155', paddingBottom: '10px' }}>
+            <h3 style={{ color: '#38bdf8', fontSize: '16px', margin: 0 }}>
+              📅 تفاصيل أحداث اليوم
+            </h3>
+          </div>
+          {eventsLoading ? (
+            <p style={{ color: '#94a3b8', fontSize: '14px' }}>جاري التحميل...</p>
+          ) : todayEvents.length === 0 ? (
+            <p style={{ color: '#64748b', fontSize: '14px' }}>لا توجد أحداث مجدولة اليوم.</p>
+          ) : (
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              {todayEvents.map(ev => (
+                <li key={ev.id} style={{ padding: '10px 0', borderBottom: '1px solid #334155' }}>
+                  <strong style={{ color: '#f8fafc' }}>{ev.title}</strong>
+                  {ev.event_time && <span style={{ color: '#94a3b8', fontSize: '12px', marginRight: '10px' }}>({ev.event_time})</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* أحداث الغد مع رابط الأجندة الشهرية */}
+        <div style={{ backgroundColor: '#1e293b', padding: '24px', borderRadius: '16px', border: '1px solid #334155' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '1px solid #334155', paddingBottom: '10px' }}>
+            <h3 style={{ color: '#38bdf8', fontSize: '16px', margin: 0 }}>
+              📆 تفاصيل أحداث الغد
+            </h3>
+            <button
+              onClick={() => alert('جاري تجهيز فتح الأجندة الشهرية...')}
+              style={{
+                backgroundColor: 'transparent',
+                border: 'none',
+                color: '#38bdf8',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: 'bold',
+                textDecoration: 'underline'
+              }}
+            >
+              📥 تحميل الأجندة الشهرية
+            </button>
+          </div>
+          {eventsLoading ? (
+            <p style={{ color: '#94a3b8', fontSize: '14px' }}>جاري التحميل...</p>
+          ) : tomorrowEvents.length === 0 ? (
+            <p style={{ color: '#64748b', fontSize: '14px' }}>لا توجد أحداث مجدولة ليوم الغد.</p>
+          ) : (
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              {tomorrowEvents.map(ev => (
+                <li key={ev.id} style={{ padding: '10px 0', borderBottom: '1px solid #334155' }}>
+                  <strong style={{ color: '#f8fafc' }}>{ev.title}</strong>
+                  {ev.event_time && <span style={{ color: '#94a3b8', fontSize: '12px', marginRight: '10px' }}>({ev.event_time})</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      {/* نافذة إضافة أو تعديل موكل (Modal) */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-xl border border-slate-100 animate-scale-in">
-            <div className="bg-slate-50 px-6 py-4 border-b border-slate-100">
-              <h3 className="text-lg font-bold text-navy-900">{editingClient ? 'تعديل بيانات الموكل' : 'إضافة موكل جديد'}</h3>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15, 23, 42, 0.7)', padding: '20px' }}>
+          <div style={{ background: '#1e293b', border: '1px solid #334155', width: '100%', maxWidth: '600px', borderRadius: '16px', overflow: 'hidden' }}>
+            <div style={{ background: '#0f172a', padding: '16px 20px', borderBottom: '1px solid #334155' }}>
+              <h3 style={{ color: '#f8fafc', fontSize: '16px', margin: 0 }}>{editingClient ? 'تعديل بيانات الموكل' : 'إضافة موكل جديد'}</h3>
             </div>
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <form onSubmit={handleClientSubmit} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">اسم الموكل *</label>
-                  <input type="text" required className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.client_name} onChange={e => setFormData({ ...formData, client_name: e.target.value })} />
+                  <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '5px' }}>اسم الموكل *</label>
+                  <input type="text" required value={formData.client_name} onChange={e => setFormData({ ...formData, client_name: e.target.value })} style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: '8px', padding: '10px', color: '#fff' }} />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">تاريخ التعاقد</label>
-                  <input type="date" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.contract_date} onChange={e => setFormData({ ...formData, contract_date: e.target.value })} />
+                  <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '5px' }}>تاريخ التعاقد</label>
+                  <input type="date" value={formData.contract_date} onChange={e => setFormData({ ...formData, contract_date: e.target.value })} style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: '8px', padding: '10px', color: '#fff' }} />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">نوع التوكيل</label>
-                  <select className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.power_of_attorney_type} onChange={e => setFormData({ ...formData, power_of_attorney_type: e.target.value })}>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '5px' }}>نوع التوكيل</label>
+                  <select value={formData.power_of_attorney_type} onChange={e => setFormData({ ...formData, power_of_attorney_type: e.target.value })} style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: '8px', padding: '10px', color: '#fff' }}>
                     <option value="توكيل عام">توكيل عام</option>
                     <option value="توكيل خاص">توكيل خاص</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">رقم التوكيل</label>
-                  <input type="text" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.power_of_attorney_number} onChange={e => setFormData({ ...formData, power_of_attorney_number: e.target.value })} />
+                  <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '5px' }}>رقم التوكيل</label>
+                  <input type="text" value={formData.power_of_attorney_number} onChange={e => setFormData({ ...formData, power_of_attorney_number: e.target.value })} style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: '8px', padding: '10px', color: '#fff' }} />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">تاريخ التوكيل</label>
-                  <input type="date" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.power_of_attorney_date} onChange={e => setFormData({ ...formData, power_of_attorney_date: e.target.value })} />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">نوع الموكل</label>
-                  <select className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.client_type} onChange={e => setFormData({ ...formData, client_type: e.target.value })}>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '5px' }}>نوع الموكل</label>
+                  <select value={formData.client_type} onChange={e => setFormData({ ...formData, client_type: e.target.value })} style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: '8px', padding: '10px', color: '#fff' }}>
                     <option value="فردي">فردي</option>
                     <option value="شركة">شركة</option>
                     <option value="هيئة">هيئة</option>
@@ -303,29 +601,13 @@ export default function ClientsManager({ onSelect, selectedClientId }: ClientsMa
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">رقم التليفون</label>
-                  <input type="text" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">القطاع</label>
-                  <select className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.sector} onChange={e => setFormData({ ...formData, sector: e.target.value })}>
-                    <option value="اهلي">اهلي</option>
-                    <option value="خاص">خاص</option>
-                    <option value="حكومي">حكومي</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">الجهة</label>
-                  <input type="text" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.entity} onChange={e => setFormData({ ...formData, entity: e.target.value })} />
+                  <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '5px' }}>رقم الهاتف</label>
+                  <input type="text" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: '8px', padding: '10px', color: '#fff' }} />
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">ملاحظات</label>
-                <textarea rows={3} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none" value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} />
-              </div>
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                <button type="button" onClick={() => { setIsModalOpen(false); setEditingClient(null); }} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">إلغاء</button>
-                <button type="submit" className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700 shadow-sm transition-colors">حفظ البيانات</button>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                <button type="button" onClick={() => setIsModalOpen(false)} style={{ background: '#334155', border: 'none', color: '#fff', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer' }}>إلغاء</button>
+                <button type="submit" style={{ background: '#0284c7', border: 'none', color: '#fff', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>حفظ البيانات</button>
               </div>
             </form>
           </div>

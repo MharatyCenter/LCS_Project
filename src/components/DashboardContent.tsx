@@ -1,215 +1,967 @@
-import { useState, useEffect } from 'react';
-import { Eye, EyeOff, Menu, Bell, Scale, ShieldCheck, X } from 'lucide-react';
-import StatsCards from './StatsCards';
-import TodayAndTomorrowEvents from './TodayAndTomorrowEvents';
-import ClientsManager from './ClientsManager';
-import CasesManager from './CasesManager';
-import EventsManager from './EventsManager';
-import LawyersManager from './LawyersManager';
-import { NAV_ITEMS, type ViewKey } from './navConfig';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../Services/supabaseClient';
+import { 
+  Users, 
+  Briefcase, 
+  Calendar, 
+  Shield, 
+  Plus, 
+  X, 
+  Search, 
+  ChevronDown, 
+  ChevronUp, 
+  Trash2,
+  Edit,
+  Clock,
+  Menu,
+  CalendarDays
+} from 'lucide-react';
 
 export default function DashboardContent() {
-  const [view, setView] = useState<ViewKey>('overview');
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
-  const [selectedCaseId, setSelectedCaseId] = useState<number | null>(null);
-  const [statsVisible, setStatsVisible] = useState(true);
+  const [clients, setClients] = useState<any[]>([]);
+  const [cases, setCases] = useState<any[]>([]);
+  const [events, setEvents] = useState<any[]>([]);
 
-  const [userName, setUserName] = useState('عاطف موسى');
-  const [officeName, setOfficeName] = useState('مكتب عاطف موسى للاستشارات القانونية');
+  // قوائم الخيارات الديناميكية للحقول المختلفة
+  const [clientTypes, setClientTypes] = useState<string[]>(['فردي', 'شركة', 'مؤسسة', 'جمعية']);
+  const [poaTypes, setPoaTypes] = useState<string[]>(['توكيل عام رسمي', 'توكيل خاص', 'توكيل قضايا']);
+  const [sectors, setSectors] = useState<string[]>(['مدني', 'تجاري', 'إداري', 'عمالي']);
+  const [entities, setEntities] = useState<string[]>(['محكمة الابتدائية', 'محكمة الاستئناف', 'مجلس الدولة']);
+  
+  const [caseTypes, setCaseTypes] = useState<string[]>(['مدني مستعجل', 'تجاري', 'عمالي', 'إداري', 'جنائي']);
+  const [litigationDegrees, setLitigationDegrees] = useState<string[]>(['ابتدائي', 'استئناف', 'نقض', 'أول درجة']);
+  const [opponentTypes, setOpponentTypes] = useState<string[]>(['مدعى عليه', 'متهم', 'مستأنف ضده', 'طاعن']);
+  
+  const [eventTypes, setEventTypes] = useState<string[]>(['جلسة مرافعة', 'تقديم مستندات', 'النطق بالحكم', 'إعلان صحيفة']);
+  const [eventStatuses, setEventStatuses] = useState<string[]>(['قيد الانتظار', 'تم الحجز للحكم', 'تم التأجيل', 'منتهي']);
 
-  useEffect(() => {
-    const storedLawyer = localStorage.getItem('lawyer_name');
-    const storedOffice = localStorage.getItem('office_name');
-    if (storedLawyer) setUserName(storedLawyer);
-    if (storedOffice) setOfficeName(storedOffice);
-  }, [view]);
+  // الفلاتر ومربعات البحث
+  const [clientSearch, setClientSearch] = useState('');
+  const [caseSearch, setCaseSearch] = useState('');
+  const [eventSearch, setEventSearch] = useState('');
+  const [selectedClientIdFilter, setSelectedClientIdFilter] = useState<number | null>(null);
+  const [selectedCaseIdFilter, setSelectedCaseIdFilter] = useState<number | null>(null);
 
-  const activeItem = NAV_ITEMS.find((n) => n.key === view);
+  // حالات الطي والتوسيع
+  const [expandClients, setExpandClients] = useState(true);
+  const [expandCases, setExpandCases] = useState(true);
+  const [expandEvents, setExpandEvents] = useState(true);
 
-  function navigate(key: ViewKey) {
-    setView(key);
-    setMobileNavOpen(false);
-  }
+  // حالات النوافذ الرئيسية (للإضافة والتعديل)
+  const [showClientModal, setShowClientModal] = useState(false);
+  const [editingClient, setEditingClient] = useState<any | null>(null);
 
-  function selectClient(id: number | null) {
-    setSelectedClientId(id);
-    setSelectedCaseId(null); // إعادة تعيين فلتر القضايا عند اختيار عميل جديد
-  }
+  const [showCaseModal, setShowCaseModal] = useState(false);
+  const [editingCase, setEditingCase] = useState<any | null>(null);
 
-  const handleClearFilters = () => {
-    setSelectedClientId(null);
-    setSelectedCaseId(null);
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<any | null>(null);
+
+  // حالة القائمة الجانبية
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const userOfficeInfo = {
+    officeName: "مكتب الأستاذ المحامي / عكاشة",
+    subTitle: "النظام القانوني الموحد - النسخة الأساسية"
   };
 
+  useEffect(() => {
+    const link = document.createElement('link');
+    link.href = 'https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap';
+    link.rel = 'stylesheet';
+    document.head.appendChild(link);
+
+    fetchAllData();
+  }, []);
+
+  const fetchAllData = async () => {
+    try {
+      const { data: clientsData } = await supabase.from('clients').select('*').order('client_name', { ascending: true });
+      if (clientsData) setClients(clientsData);
+
+      const { data: casesData } = await supabase.from('cases').select('*, clients(client_name)').order('case_number', { ascending: true });
+      if (casesData) setCases(casesData);
+
+      const { data: eventsData } = await supabase.from('events').select('*, cases(case_number, opponent_name)').order('event_date', { ascending: false });
+      if (eventsData) setEvents(eventsData);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    }
+  };
+
+  const handleDelete = async (table: string, id: number) => {
+    if (confirm('هل أنت متأكد من حذف هذا السجل؟')) {
+      const { error } = await supabase.from(table).delete().eq('id', id);
+      if (!error) {
+        fetchAllData();
+      } else {
+        alert('خطأ أثناء الحذف: ' + error.message);
+      }
+    }
+  };
+
+  // دوال الإضافة السريعة لعناصر القوائم المنسدلة الديناميكية
+  const handleAddDynamicOption = (title: string, setter: React.Dispatch<React.SetStateAction<string[]>>, currentList: string[]) => {
+    const newVal = prompt(`أدخل البند الجديد لـ (${title}):`);
+    if (newVal && newVal.trim() !== '') {
+      if (!currentList.includes(newVal.trim())) {
+        setter([...currentList, newVal.trim()]);
+      }
+    }
+  };
+
+  // حفظ موكل (إضافة أو تعديل)
+  const handleClientSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const clientData = {
+      client_name: formData.get('client_name'),
+      contract_date: formData.get('contract_date') || null,
+      power_of_attorney_type: formData.get('power_of_attorney_type'),
+      power_of_attorney_number: formData.get('power_of_attorney_number'),
+      client_type: formData.get('client_type'),
+      phone: formData.get('phone'),
+      sector: formData.get('sector'),
+      entity: formData.get('entity'),
+      notes: formData.get('notes'),
+    };
+
+    let error;
+    if (editingClient) {
+      const res = await supabase.from('clients').update(clientData).eq('id', editingClient.id);
+      error = res.error;
+    } else {
+      const res = await supabase.from('clients').insert([clientData]);
+      error = res.error;
+    }
+
+    if (!error) {
+      setShowClientModal(false);
+      setEditingClient(null);
+      fetchAllData();
+    } else {
+      alert('خطأ أثناء حفظ الموكل: ' + error.message);
+    }
+  };
+
+  // حفظ قضية (إضافة أو تعديل)
+  const handleCaseSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const caseData = {
+      case_number: formData.get('case_number'),
+      case_date: formData.get('case_date') || null,
+      case_type: formData.get('case_type'),
+      client_id: formData.get('client_id') ? Number(formData.get('client_id')) : null,
+      opponent_name: formData.get('opponent_name'),
+      opponent_type: formData.get('opponent_type'),
+      litigation_degree: formData.get('litigation_degree'),
+      notes: formData.get('notes'),
+    };
+
+    let error;
+    if (editingCase) {
+      const res = await supabase.from('cases').update(caseData).eq('id', editingCase.id);
+      error = res.error;
+    } else {
+      const res = await supabase.from('cases').insert([caseData]);
+      error = res.error;
+    }
+
+    if (!error) {
+      setShowCaseModal(false);
+      setEditingCase(null);
+      fetchAllData();
+    } else {
+      alert('خطأ أثناء حفظ القضية: ' + error.message);
+    }
+  };
+
+  // حفظ حدث (إضافة أو تعديل)
+  const handleEventSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const eventData = {
+      event_date: formData.get('event_date') || null,
+      event_type: formData.get('event_type'),
+      event_name: formData.get('event_name'),
+      case_id: formData.get('case_id') ? Number(formData.get('case_id')) : null,
+      event_status: formData.get('event_status'),
+      notes: formData.get('notes'),
+    };
+
+    let error;
+    if (editingEvent) {
+      const res = await supabase.from('events').update(eventData).eq('id', editingEvent.id);
+      error = res.error;
+    } else {
+      const res = await supabase.from('events').insert([eventData]);
+      error = res.error;
+    }
+
+    if (!error) {
+      setShowEventModal(false);
+      setEditingEvent(null);
+      fetchAllData();
+    } else {
+      alert('خطأ أثناء حفظ الحدث: ' + error.message);
+    }
+  };
+
+  const filteredClients = clients.filter(c => c.client_name?.toLowerCase().includes(clientSearch.toLowerCase()));
+
+  const filteredCases = cases.filter(cs => {
+    const matchesSearch = cs.case_number?.toLowerCase().includes(caseSearch.toLowerCase()) || cs.clients?.client_name?.toLowerCase().includes(caseSearch.toLowerCase());
+    const matchesClientFilter = selectedClientIdFilter ? cs.client_id === selectedClientIdFilter : true;
+    return matchesSearch && matchesClientFilter;
+  });
+
+  const filteredEvents = events.filter(ev => {
+    const matchesSearch = ev.event_name?.toLowerCase().includes(eventSearch.toLowerCase()) || ev.cases?.case_number?.toLowerCase().includes(eventSearch.toLowerCase());
+    const matchesCaseFilter = selectedCaseIdFilter ? ev.case_id === selectedCaseIdFilter : true;
+    return matchesSearch && matchesCaseFilter;
+  });
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const tomorrowDate = new Date();
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const tomorrowStr = tomorrowDate.toISOString().split('T')[0];
+
+  const todayEvents = events.filter(ev => ev.event_date === todayStr);
+  const tomorrowEvents = events.filter(ev => ev.event_date === tomorrowStr);
+
   return (
-    <div dir="rtl" className="flex min-h-screen bg-slate-100 flex-col font-sans">
+    <div className="min-h-screen bg-[#F8F9FA] text-gray-900" style={{ fontFamily: "'Cairo', sans-serif" }} dir="rtl">
       
-      {/* هيدر احترافي بتصميم فاخر */}
-      <header className="sticky top-0 z-30 border-b border-gold-200/50 bg-gradient-to-r from-navy-950 via-navy-900 to-navy-950 px-4 py-3.5 sm:px-8 shadow-md">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-gold-400 via-gold-500 to-gold-600 shadow-lg text-navy-950 flex-shrink-0 ring-2 ring-gold-300/30">
-              <Scale className="h-6 w-6" />
-            </div>
-            <div className="leading-tight">
-              <div className="flex items-center gap-2">
-                <h1 className="text-sm font-bold text-white sm:text-base tracking-wide">
-                  {userName}
-                </h1>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-gold-500/10 text-gold-400 border border-gold-500/20">
-                  <ShieldCheck className="h-3 w-3" />
-                  مدير النظام
-                </span>
-              </div>
-              <p className="text-xs font-medium text-gold-300/90 mt-0.5">
-                {officeName}
-              </p>
-            </div>
-          </div>
-
+      {/* الهيدر العلوي */}
+      <header className="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white shadow-md px-6 py-4 flex justify-between items-center sticky top-0 z-40 border-b border-blue-900/50">
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="p-2 bg-blue-900/60 hover:bg-blue-800 rounded-xl transition text-blue-200 border border-blue-700/50"
+            title="القائمة الجانبية"
+          >
+            <Menu className="w-6 h-6" />
+          </button>
           <div className="flex items-center gap-3">
-            <div className="hidden sm:block text-left pl-2 border-l border-slate-700/60">
-              <p className="text-[11px] text-slate-400">القسم الحالي</p>
-              <p className="text-xs font-semibold text-slate-200">{activeItem?.label ?? 'لوحة التحكم الرئيسية'}</p>
+            <div className="w-11 h-11 bg-blue-600/30 rounded-xl flex items-center justify-center text-blue-300 font-black shadow-inner border border-blue-500/30">
+              <Shield className="w-6 h-6" />
             </div>
-
-            <button
-              className="relative rounded-xl p-2.5 bg-slate-800/80 text-slate-300 hover:text-white transition-all hover:bg-slate-800 border border-slate-700/50 shadow-inner"
-              aria-label="الإشعارات"
-            >
-              <Bell className="h-5 w-5" />
-              <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-gold-500 ring-2 ring-navy-950 animate-pulse" />
-            </button>
-
-            <button
-              onClick={() => setMobileNavOpen(true)}
-              className="rounded-xl p-2.5 bg-gradient-to-r from-gold-500 to-gold-600 text-navy-950 shadow-md transition-all hover:brightness-110 font-bold"
-              aria-label="القائمة"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
+            <div className="text-right">
+              <h2 className="font-bold text-white text-base tracking-wide">{userOfficeInfo.officeName}</h2>
+              <p className="text-xs text-blue-300/80">{userOfficeInfo.subTitle}</p>
+            </div>
           </div>
+        </div>
+
+        <div>
+          <button 
+            onClick={() => { setSelectedClientIdFilter(null); setSelectedCaseIdFilter(null); }} 
+            className="text-xs bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl font-bold text-white transition border border-white/10 backdrop-blur-sm"
+          >
+            إلغاء الفلاتر النشطة
+          </button>
         </div>
       </header>
 
       {/* المحتوى الرئيسي */}
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8 space-y-6">
-        
-        {/* شريط الفلتر النشط التفاعلي */}
-        {(selectedClientId !== null || selectedCaseId !== null) && (
-          <div className="flex items-center justify-between rounded-2xl bg-gradient-to-r from-navy-900 to-navy-950 border border-gold-500/30 px-5 py-3.5 text-white shadow-lg animate-fade-in">
-            <div className="flex items-center gap-3 text-xs sm:text-sm">
-              <span className="flex h-7 px-2.5 items-center justify-center rounded-xl bg-gold-500 text-navy-950 font-bold text-xs">
-                فلتر نشط
-              </span>
-              <div className="flex items-center gap-2 text-slate-200">
-                {selectedClientId !== null && (
-                  <span className="font-semibold text-gold-300">عرض قضايا العميل المختار</span>
-                )}
-                {selectedCaseId !== null && (
-                  <>
-                    {selectedClientId !== null && <span className="text-slate-500">/</span>}
-                    <span className="font-semibold text-gold-300">عرض أحداث القضية رقم: {selectedCaseId}</span>
-                  </>
-                )}
-              </div>
-            </div>
-            
-            <button
-              onClick={handleClearFilters}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 hover:bg-white/20 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:text-white transition-all border border-white/10"
-              title="إلغاء التصفية وعرض كافة البيانات"
-            >
-              <X className="h-3.5 w-3.5 text-gold-400" />
-              <span>إلغاء التصفية</span>
-            </button>
-          </div>
-        )}
+      <div className="p-6 max-w-7xl mx-auto space-y-6">
 
-        {/* زر إخفاء/إظهار العدادات */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="h-px flex-1 bg-gradient-to-l from-transparent via-slate-300 to-transparent" />
-          <button
-            onClick={() => setStatsVisible((v) => !v)}
-            className="inline-flex items-center gap-2 rounded-full border border-slate-300/80 bg-white px-5 py-2 text-xs font-semibold text-navy-700 shadow-sm transition-all hover:border-gold-400 hover:bg-gold-50/60 hover:text-navy-900"
-          >
-            {statsVisible ? (
-              <>
-                <EyeOff className="h-3.5 w-3.5 text-navy-500" />
-                إخفاء العدادات
-              </>
-            ) : (
-              <>
-                <Eye className="h-3.5 w-3.5 text-navy-500" />
-                إظهار العدادات
-              </>
-            )}
-          </button>
-          <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-300 to-transparent" />
+        {/* المؤشرات */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between border-r-4 border-r-blue-900">
+            <div>
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">عدد الموكلين</p>
+              <h3 className="text-3xl font-black text-blue-950 mt-1">{clients.length}</h3>
+            </div>
+            <div className="p-3.5 bg-blue-50 text-blue-900 rounded-2xl shadow-sm"><Users className="w-6 h-6" /></div>
+          </div>
+
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between border-r-4 border-r-rose-800">
+            <div>
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">عدد القضايا</p>
+              <h3 className="text-3xl font-black text-rose-950 mt-1">{cases.length}</h3>
+            </div>
+            <div className="p-3.5 bg-rose-50 text-rose-800 rounded-2xl shadow-sm"><Briefcase className="w-6 h-6" /></div>
+          </div>
+
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between border-r-4 border-r-emerald-700">
+            <div>
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">إجمالي الأحداث</p>
+              <h3 className="text-3xl font-black text-emerald-950 mt-1">{events.length}</h3>
+            </div>
+            <div className="p-3.5 bg-emerald-50 text-emerald-700 rounded-2xl shadow-sm"><Calendar className="w-6 h-6" /></div>
+          </div>
+
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between border-r-4 border-r-amber-600">
+            <div>
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">أحداث اليوم</p>
+              <h3 className="text-3xl font-black text-amber-950 mt-1">{todayEvents.length}</h3>
+            </div>
+            <div className="p-3.5 bg-amber-50 text-amber-600 rounded-2xl shadow-sm"><Clock className="w-6 h-6" /></div>
+          </div>
         </div>
 
-        {view === 'overview' && (
-          <div className="space-y-6 animate-fade-in">
-            {statsVisible && <StatsCards />}
-            
-            {/* 1. قسم أحداث اليوم وغداً */}
-            <TodayAndTomorrowEvents />
-            
-            {/* 2. الأقسام الثلاثة الرئيسية مرتبطة وتتفاعل مع النقرات */}
-            <div className="space-y-6 pt-4 border-t border-slate-200">
-              {/* قسم الموكلين - الضغط على اسم العميل يفلتر القضايا */}
-              <ClientsManager onSelect={selectClient} selectedClientId={selectedClientId} />
-              
-              {/* قسم القضايا - الضغط على القضية يفلتر الأحداث */}
-              <CasesManager
-                selectedClientId={selectedClientId}
-                onSelect={(caseId) => setSelectedCaseId(caseId)}
-                selectedCaseId={selectedCaseId}
-                onNavigate={navigate}
-              />
-
-              {/* قسم إدارة وإضافة وتعديل وحذف الأحداث - يتأثر بالقضية المختارة */}
-              <EventsManager selectedCaseId={selectedCaseId} />
+        {/* أحداث اليوم وغد */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-white rounded-2xl shadow-sm border border-emerald-100 p-6">
+            <div className="flex justify-between items-center mb-4 border-b border-emerald-50 pb-3">
+              <h3 className="text-base font-bold text-emerald-900 flex items-center gap-2">
+                <Clock className="w-5 h-5 text-emerald-700" /> أحداث وجلسات اليوم
+              </h3>
+              <span className="text-xs px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-full font-bold">{todayEvents.length} حدث</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-right border-collapse">
+                <thead>
+                  <tr className="bg-emerald-50/50 text-emerald-900 text-xs border-b">
+                    <th className="p-3 rounded-r-xl">اسم الحدث</th>
+                    <th className="p-3">نوع الحدث</th>
+                    <th className="p-3 rounded-l-xl">القضية</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y text-xs">
+                  {todayEvents.length === 0 ? (
+                    <tr><td colSpan={3} className="text-center p-6 text-gray-400">لا توجد أحداث أو جلسات مسجلة اليوم</td></tr>
+                  ) : (
+                    todayEvents.map((ev) => (
+                      <tr key={ev.id} className="hover:bg-emerald-50/30 transition">
+                        <td className="p-3 font-bold text-gray-900">{ev.event_name}</td>
+                        <td className="p-3"><span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md font-semibold">{ev.event_type}</span></td>
+                        <td className="p-3 text-gray-600">{ev.cases?.case_number || '-'}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
-        )}
 
-        {view === 'lawyers' && (
-          <div className="animate-fade-in">
-            <LawyersManager />
+          <div className="bg-white rounded-2xl shadow-sm border border-blue-100 p-6">
+            <div className="flex justify-between items-center mb-4 border-b border-blue-50 pb-3">
+              <h3 className="text-base font-bold text-blue-900 flex items-center gap-2">
+                <CalendarDays className="w-5 h-5 text-blue-700" /> أحداث الغد والأجندة
+              </h3>
+              <span className="text-xs px-2.5 py-1 bg-blue-100 text-blue-800 rounded-full font-bold">{tomorrowEvents.length} حدث</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-right border-collapse">
+                <thead>
+                  <tr className="bg-blue-50/50 text-blue-900 text-xs border-b">
+                    <th className="p-3 rounded-r-xl">اسم الحدث</th>
+                    <th className="p-3">نوع الحدث</th>
+                    <th className="p-3 rounded-l-xl">القضية</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y text-xs">
+                  {tomorrowEvents.length === 0 ? (
+                    <tr><td colSpan={3} className="text-center p-6 text-gray-400">لا توجد أحداث أو جلسات مسجلة غداً</td></tr>
+                  ) : (
+                    tomorrowEvents.map((ev) => (
+                      <tr key={ev.id} className="hover:bg-blue-50/30 transition">
+                        <td className="p-3 font-bold text-gray-900">{ev.event_name}</td>
+                        <td className="p-3"><span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md font-semibold">{ev.event_type}</span></td>
+                        <td className="p-3 text-gray-600">{ev.cases?.case_number || '-'}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        )}
+        </div>
 
-        {view === 'clients' && (
-          <div className="animate-fade-in">
-            <ClientsManager onSelect={selectClient} selectedClientId={selectedClientId} />
+        {/* قسم الموكلين */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
+          <div className="flex justify-between items-center border-b pb-3 border-blue-900/20">
+            <div className="flex items-center gap-3">
+              <button onClick={() => setExpandClients(!expandClients)} className="text-blue-900 hover:text-black">
+                {expandClients ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+              </button>
+              <h3 className="text-lg font-bold text-blue-950 flex items-center gap-2">
+                <Users className="w-5 h-5 text-blue-900" /> إدارة الموكلين
+              </h3>
+            </div>
+            <button onClick={() => { setEditingClient(null); setShowClientModal(true); }} className="bg-blue-900 hover:bg-blue-950 text-white px-4 py-2 rounded-xl flex items-center gap-1.5 text-sm font-bold shadow-sm transition">
+              <Plus className="w-4 h-4" /> إضافة موكل جديد
+            </button>
           </div>
-        )}
 
-        {view === 'cases' && (
-          <div className="space-y-6 animate-fade-in">
-            <ClientsManager onSelect={selectClient} selectedClientId={selectedClientId} />
-            <CasesManager
-              selectedClientId={selectedClientId}
-              onSelect={(caseId) => setSelectedCaseId(caseId)}
-              selectedCaseId={selectedCaseId}
-              onNavigate={navigate}
+          <div className="relative w-full">
+            <Search className="w-5 h-5 text-gray-400 absolute right-4 top-3.5" />
+            <input 
+              type="text" 
+              placeholder="بحث شامل في الموكلين..." 
+              value={clientSearch}
+              onChange={(e) => setClientSearch(e.target.value)}
+              className="w-full border border-slate-200 rounded-xl pr-12 pl-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-900 bg-slate-50/50"
             />
           </div>
-        )}
 
-        {view === 'events' && (
-          <div className="space-y-6 animate-fade-in">
-            <CasesManager
-              selectedClientId={null}
-              onSelect={(caseId) => setSelectedCaseId(caseId)}
-              selectedCaseId={selectedCaseId}
-            />
-            <EventsManager selectedCaseId={selectedCaseId} />
+          {expandClients && (
+            <div className="overflow-x-auto">
+              <p className="text-xs text-blue-900 mb-2 font-bold">*(انقر على أي موكل لتصفية القضايا المرتبطة به أدناه)*</p>
+              <table className="w-full text-right border-collapse">
+                <thead>
+                  <tr className="bg-blue-950 text-white text-xs">
+                    <th className="p-3 rounded-r-xl">اسم الموكل</th>
+                    <th className="p-3">نوع الموكل</th>
+                    <th className="p-3">رقم الهاتف</th>
+                    <th className="p-3">تاريخ التعاقد</th>
+                    <th className="p-3 text-center rounded-l-xl">إجراءات</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y text-sm">
+                  {filteredClients.length === 0 ? (
+                    <tr><td colSpan={5} className="text-center p-6 text-gray-400">لا توجد سجلات موكلين</td></tr>
+                  ) : (
+                    filteredClients.map((c) => (
+                      <tr 
+                        key={c.id} 
+                        onClick={() => setSelectedClientIdFilter(selectedClientIdFilter === c.id ? null : c.id)}
+                        className={`cursor-pointer transition ${selectedClientIdFilter === c.id ? 'bg-blue-100 font-bold' : 'hover:bg-slate-50'}`}
+                      >
+                        <td className="p-3 text-blue-950 font-bold">{c.client_name} {selectedClientIdFilter === c.id && ' (✔ محدد)'}</td>
+                        <td className="p-3">{c.client_type || '-'}</td>
+                        <td className="p-3">{c.phone || '-'}</td>
+                        <td className="p-3">{c.contract_date || '-'}</td>
+                        <td className="p-3 flex justify-center gap-2">
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); setEditingClient(c); setShowClientModal(true); }} 
+                            className="p-1.5 text-blue-700 hover:bg-blue-50 rounded-lg transition"
+                            title="تعديل الموكل"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); handleDelete('clients', c.id); }} 
+                            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                            title="حذف الموكل"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* قسم القضايا */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
+          <div className="flex justify-between items-center border-b pb-3 border-rose-900/20">
+            <div className="flex items-center gap-3">
+              <button onClick={() => setExpandCases(!expandCases)} className="text-rose-900 hover:text-black">
+                {expandCases ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+              </button>
+              <h3 className="text-lg font-bold text-rose-950 flex items-center gap-2">
+                <Briefcase className="w-5 h-5 text-rose-800" /> إدارة القضايا 
+                {selectedClientIdFilter && <span className="text-xs text-rose-700 bg-rose-50 px-2.5 py-1 rounded-full mr-2 font-bold">مفلترة للموكل المختار</span>}
+              </h3>
+            </div>
+            <button onClick={() => { setEditingCase(null); setShowCaseModal(true); }} className="bg-rose-800 hover:bg-rose-900 text-white px-4 py-2 rounded-xl flex items-center gap-1.5 text-sm font-bold shadow-sm transition">
+              <Plus className="w-4 h-4" /> إضافة قضية جديدة
+            </button>
           </div>
-        )}
-      </main>
+
+          <div className="relative w-full">
+            <Search className="w-5 h-5 text-gray-400 absolute right-4 top-3.5" />
+            <input 
+              type="text" 
+              placeholder="بحث برقم القضية أو اسم الموكل أو الخصم..." 
+              value={caseSearch}
+              onChange={(e) => setCaseSearch(e.target.value)}
+              className="w-full border border-slate-200 rounded-xl pr-12 pl-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-rose-800 bg-slate-50/50"
+            />
+          </div>
+
+          {expandCases && (
+            <div className="overflow-x-auto">
+              <p className="text-xs text-rose-900 mb-2 font-bold">*(انقر على أي قضية لتصفية الأحداث المرتبطة بها أدناه)*</p>
+              <table className="w-full text-right border-collapse">
+                <thead>
+                  <tr className="bg-rose-950 text-white text-xs">
+                    <th className="p-3 rounded-r-xl">رقم القضية</th>
+                    <th className="p-3">تاريخ القضية</th>
+                    <th className="p-3">اسم الموكل</th>
+                    <th className="p-3 text-center rounded-l-xl">إجراءات</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y text-sm">
+                  {filteredCases.length === 0 ? (
+                    <tr><td colSpan={4} className="text-center p-6 text-gray-400">لا توجد قضايا مطابقة</td></tr>
+                  ) : (
+                    filteredCases.map((cs) => (
+                      <tr 
+                        key={cs.id}
+                        onClick={() => setSelectedCaseIdFilter(selectedCaseIdFilter === cs.id ? null : cs.id)}
+                        className={`cursor-pointer transition ${selectedCaseIdFilter === cs.id ? 'bg-rose-100 font-bold' : 'hover:bg-slate-50'}`}
+                      >
+                        <td className="p-3 text-rose-950 font-bold">{cs.case_number} {selectedCaseIdFilter === cs.id && ' (✔ محدد)'}</td>
+                        <td className="p-3">{cs.case_date || '-'}</td>
+                        <td className="p-3">{cs.clients?.client_name || '-'}</td>
+                        <td className="p-3 flex justify-center gap-2">
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); setEditingCase(cs); setShowCaseModal(true); }} 
+                            className="p-1.5 text-rose-800 hover:bg-rose-50 rounded-lg transition"
+                            title="تعديل القضية"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); handleDelete('cases', cs.id); }} 
+                            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                            title="حذف القضية"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* قسم الأحداث */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
+          <div className="flex justify-between items-center border-b pb-3 border-emerald-900/20">
+            <div className="flex items-center gap-3">
+              <button onClick={() => setExpandEvents(!expandEvents)} className="text-emerald-800 hover:text-black">
+                {expandEvents ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+              </button>
+              <h3 className="text-lg font-bold text-emerald-950 flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-emerald-700" /> إدارة الأحداث والجلسات 
+                {selectedCaseIdFilter && <span className="text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full mr-2 font-bold">مفلترة للقضية المختارة</span>}
+              </h3>
+            </div>
+            <button onClick={() => { setEditingEvent(null); setShowEventModal(true); }} className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 rounded-xl flex items-center gap-1.5 text-sm font-bold shadow-sm transition">
+              <Plus className="w-4 h-4" /> إضافة حدث جديد
+            </button>
+          </div>
+
+          <div className="relative w-full">
+            <Search className="w-5 h-5 text-gray-400 absolute right-4 top-3.5" />
+            <input 
+              type="text" 
+              placeholder="بحث باسم الحدث أو نوعه أو رقم القضية..." 
+              value={eventSearch}
+              onChange={(e) => setEventSearch(e.target.value)}
+              className="w-full border border-slate-200 rounded-xl pr-12 pl-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-700 bg-slate-50/50"
+            />
+          </div>
+
+          {expandEvents && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-right border-collapse">
+                <thead>
+                  <tr className="bg-emerald-950 text-white text-xs">
+                    <th className="p-3 rounded-r-xl">اسم الحدث</th>
+                    <th className="p-3">تاريخ الحدث</th>
+                    <th className="p-3">نوع الحدث</th>
+                    <th className="p-3">القضية المرتبطة</th>
+                    <th className="p-3 text-center rounded-l-xl">إجراءات</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y text-sm">
+                  {filteredEvents.length === 0 ? (
+                    <tr><td colSpan={5} className="text-center p-6 text-gray-400">لا توجد أحداث مطابقة</td></tr>
+                  ) : (
+                    filteredEvents.map((ev) => (
+                      <tr key={ev.id} className="hover:bg-slate-50 transition">
+                        <td className="p-3 font-bold text-gray-900">{ev.event_name}</td>
+                        <td className="p-3">{ev.event_date || '-'}</td>
+                        <td className="p-3"><span className="px-2.5 py-1 bg-emerald-50 text-emerald-800 rounded-full text-xs font-semibold">{ev.event_type}</span></td>
+                        <td className="p-3">{ev.cases?.case_number || '-'}</td>
+                        <td className="p-3 flex justify-center gap-2">
+                          <button 
+                            onClick={() => { setEditingEvent(ev); setShowEventModal(true); }} 
+                            className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded-lg transition"
+                            title="تعديل الحدث"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => handleDelete('events', ev.id)} 
+                            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                            title="حذف الحدث"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+      </div>
+
+      {/* نافذة إضافة أو تعديل موكل */}
+      {showClientModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto border border-slate-100">
+            <div className="flex justify-between items-center mb-4 border-b pb-3">
+              <h3 className="text-xl font-bold text-blue-950">{editingClient ? 'تعديل بيانات الموكل' : 'إضافة موكل جديد'}</h3>
+              <button onClick={() => { setShowClientModal(false); setEditingClient(null); }} className="p-2 hover:bg-gray-100 rounded-full"><X className="w-6 h-6" /></button>
+            </div>
+            <form onSubmit={handleClientSubmit} className="space-y-4 text-sm">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold mb-1 text-slate-700">اسم الموكل</label>
+                  <input type="text" name="client_name" defaultValue={editingClient?.client_name || ''} required className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-900" />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1 text-slate-700">رقم الهاتف</label>
+                  <input type="text" name="phone" defaultValue={editingClient?.phone || ''} className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-900" />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="font-bold text-slate-700">نوع الموكل</label>
+                    <button 
+                      type="button" 
+                      onClick={() => handleAddDynamicOption('نوع الموكل', setClientTypes, clientTypes)}
+                      className="text-xs bg-blue-50 text-blue-900 hover:bg-blue-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-blue-200 transition"
+                    >
+                      <Plus className="w-3 h-3" /> إضافة
+                    </button>
+                  </div>
+                  <select name="client_type" defaultValue={editingClient?.client_type || ''} className="w-full border rounded-xl p-2.5 outline-none bg-slate-50/50 focus:ring-2 focus:ring-blue-900">
+                    <option value="">-- اختر نوع الموكل --</option>
+                    {clientTypes.map((item, idx) => <option key={idx} value={item}>{item}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold mb-1 text-slate-700">تاريخ التعاقد</label>
+                  <input type="date" name="contract_date" defaultValue={editingClient?.contract_date || ''} className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-900" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="font-bold text-slate-700">نوع التوكيل</label>
+                    <button 
+                      type="button" 
+                      onClick={() => handleAddDynamicOption('نوع التوكيل', setPoaTypes, poaTypes)}
+                      className="text-xs bg-blue-50 text-blue-900 hover:bg-blue-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-blue-200 transition"
+                    >
+                      <Plus className="w-3 h-3" /> إضافة
+                    </button>
+                  </div>
+                  <select name="power_of_attorney_type" defaultValue={editingClient?.power_of_attorney_type || ''} className="w-full border rounded-xl p-2.5 outline-none bg-slate-50/50 focus:ring-2 focus:ring-blue-900">
+                    <option value="">-- اختر نوع التوكيل --</option>
+                    {poaTypes.map((item, idx) => <option key={idx} value={item}>{item}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold mb-1 text-slate-700">رقم التوكيل</label>
+                  <input type="text" name="power_of_attorney_number" defaultValue={editingClient?.power_of_attorney_number || ''} className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-900" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="font-bold text-slate-700">القطاع</label>
+                    <button 
+                      type="button" 
+                      onClick={() => handleAddDynamicOption('القطاع', setSectors, sectors)}
+                      className="text-xs bg-blue-50 text-blue-900 hover:bg-blue-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-blue-200 transition"
+                    >
+                      <Plus className="w-3 h-3" /> إضافة
+                    </button>
+                  </div>
+                  <select name="sector" defaultValue={editingClient?.sector || ''} className="w-full border rounded-xl p-2.5 outline-none bg-slate-50/50 focus:ring-2 focus:ring-blue-900">
+                    <option value="">-- اختر القطاع --</option>
+                    {sectors.map((item, idx) => <option key={idx} value={item}>{item}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="font-bold text-slate-700">الجهة</label>
+                    <button 
+                      type="button" 
+                      onClick={() => handleAddDynamicOption('الجهة', setEntities, entities)}
+                      className="text-xs bg-blue-50 text-blue-900 hover:bg-blue-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-blue-200 transition"
+                    >
+                      <Plus className="w-3 h-3" /> إضافة
+                    </button>
+                  </div>
+                  <select name="entity" defaultValue={editingClient?.entity || ''} className="w-full border rounded-xl p-2.5 outline-none bg-slate-50/50 focus:ring-2 focus:ring-blue-900">
+                    <option value="">-- اختر الجهة --</option>
+                    {entities.map((item, idx) => <option key={idx} value={item}>{item}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-700">ملاحظات</label>
+                <textarea name="notes" defaultValue={editingClient?.notes || ''} rows={3} className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-900"></textarea>
+              </div>
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <button type="button" onClick={() => { setShowClientModal(false); setEditingClient(null); }} className="px-5 py-2.5 bg-gray-100 rounded-xl font-bold">إلغاء</button>
+                <button type="submit" className="px-5 py-2.5 bg-blue-900 text-white rounded-xl font-bold shadow">{editingClient ? 'تحديث البيانات' : 'حفظ الموكل'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* نافذة إضافة أو تعديل قضية */}
+      {showCaseModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto border border-slate-100">
+            <div className="flex justify-between items-center mb-4 border-b pb-3">
+              <h3 className="text-xl font-bold text-rose-950">{editingCase ? 'تعديل بيانات القضية' : 'إضافة قضية جديدة'}</h3>
+              <button onClick={() => { setShowCaseModal(false); setEditingCase(null); }} className="p-2 hover:bg-gray-100 rounded-full"><X className="w-6 h-6" /></button>
+            </div>
+            <form onSubmit={handleCaseSubmit} className="space-y-4 text-sm">
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="font-bold text-rose-900">الموكل (اختر من القائمة)</label>
+                  <button 
+                    type="button" 
+                    onClick={() => { setEditingClient(null); setShowClientModal(true); }}
+                    className="text-xs bg-rose-50 text-rose-800 hover:bg-rose-100 font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 border border-rose-200 transition"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> إضافة موكل جديد
+                  </button>
+                </div>
+                <select name="client_id" defaultValue={editingCase?.client_id || ''} required className="w-full border rounded-xl p-2.5 outline-none bg-rose-50/50 focus:ring-2 focus:ring-rose-800">
+                  <option value="">-- اختر الموكل التابع له القضية --</option>
+                  {clients.map(c => <option key={c.id} value={c.id}>{c.client_name}</option>)}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold mb-1 text-slate-700">رقم القضية</label>
+                  <input type="text" name="case_number" defaultValue={editingCase?.case_number || ''} required className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-rose-800" />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1 text-slate-700">تاريخ القضية</label>
+                  <input type="date" name="case_date" defaultValue={editingCase?.case_date || ''} className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-rose-800" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="font-bold text-slate-700">نوع القضية</label>
+                    <button 
+                      type="button" 
+                      onClick={() => handleAddDynamicOption('نوع القضية', setCaseTypes, caseTypes)}
+                      className="text-xs bg-rose-50 text-rose-900 hover:bg-rose-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-rose-200 transition"
+                    >
+                      <Plus className="w-3 h-3" /> إضافة
+                    </button>
+                  </div>
+                  <select name="case_type" defaultValue={editingCase?.case_type || ''} className="w-full border rounded-xl p-2.5 outline-none bg-slate-50/50 focus:ring-2 focus:ring-rose-800">
+                    <option value="">-- اختر نوع القضية --</option>
+                    {caseTypes.map((item, idx) => <option key={idx} value={item}>{item}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="font-bold text-slate-700">درجة التقاضي</label>
+                    <button 
+                      type="button" 
+                      onClick={() => handleAddDynamicOption('درجة التقاضي', setLitigationDegrees, litigationDegrees)}
+                      className="text-xs bg-rose-50 text-rose-900 hover:bg-rose-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-rose-200 transition"
+                    >
+                      <Plus className="w-3 h-3" /> إضافة
+                    </button>
+                  </div>
+                  <select name="litigation_degree" defaultValue={editingCase?.litigation_degree || ''} className="w-full border rounded-xl p-2.5 outline-none bg-slate-50/50 focus:ring-2 focus:ring-rose-800">
+                    <option value="">-- اختر درجة التقاضي --</option>
+                    {litigationDegrees.map((item, idx) => <option key={idx} value={item}>{item}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold mb-1 text-slate-700">اسم الخصم</label>
+                  <input type="text" name="opponent_name" defaultValue={editingCase?.opponent_name || ''} className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-rose-800" />
+                </div>
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="font-bold text-slate-700">صفة الخصم</label>
+                    <button 
+                      type="button" 
+                      onClick={() => handleAddDynamicOption('صفة الخصم', setOpponentTypes, opponentTypes)}
+                      className="text-xs bg-rose-50 text-rose-900 hover:bg-rose-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-rose-200 transition"
+                    >
+                      <Plus className="w-3 h-3" /> إضافة
+                    </button>
+                  </div>
+                  <select name="opponent_type" defaultValue={editingCase?.opponent_type || ''} className="w-full border rounded-xl p-2.5 outline-none bg-slate-50/50 focus:ring-2 focus:ring-rose-800">
+                    <option value="">-- اختر صفة الخصم --</option>
+                    {opponentTypes.map((item, idx) => <option key={idx} value={item}>{item}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-700">ملاحظات</label>
+                <textarea name="notes" defaultValue={editingCase?.notes || ''} rows={3} className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-rose-800"></textarea>
+              </div>
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <button type="button" onClick={() => { setShowCaseModal(false); setEditingCase(null); }} className="px-5 py-2.5 bg-gray-100 rounded-xl font-bold">إلغاء</button>
+                <button type="submit" className="px-5 py-2.5 bg-rose-800 text-white rounded-xl font-bold shadow">{editingCase ? 'تحديث البيانات' : 'حفظ القضية'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* نافذة إضافة أو تعديل حدث أو جلسة */}
+      {showEventModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto border border-slate-100">
+            <div className="flex justify-between items-center mb-4 border-b pb-3">
+              <h3 className="text-xl font-bold text-emerald-950">{editingEvent ? 'تعديل بيانات الحدث' : 'إضافة حدث أو جلسة جديدة'}</h3>
+              <button onClick={() => { setShowEventModal(false); setEditingEvent(null); }} className="p-2 hover:bg-gray-100 rounded-full"><X className="w-6 h-6" /></button>
+            </div>
+            <form onSubmit={handleEventSubmit} className="space-y-4 text-sm">
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="font-bold text-emerald-900">القضية المرتبطة (اختر القضية)</label>
+                  <button 
+                    type="button" 
+                    onClick={() => { setEditingCase(null); setShowCaseModal(true); }}
+                    className="text-xs bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 border border-emerald-200 transition"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> إضافة قضية جديدة
+                  </button>
+                </div>
+                <select name="case_id" defaultValue={editingEvent?.case_id || ''} required className="w-full border rounded-xl p-2.5 outline-none bg-emerald-50/50 focus:ring-2 focus:ring-emerald-700">
+                  <option value="">-- اختر القضية التابع لها الحدث --</option>
+                  {cases.map(cs => <option key={cs.id} value={cs.id}>قضية رقم: {cs.case_number} ({cs.clients?.client_name || 'بدون موكل'})</option>)}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold mb-1 text-slate-700">اسم الحدث / الجلسة</label>
+                  <input type="text" name="event_name" defaultValue={editingEvent?.event_name || ''} required placeholder="مثال: جلسة مرافعة..." className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-emerald-700" />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1 text-slate-700">تاريخ الحدث</label>
+                  <input type="date" name="event_date" defaultValue={editingEvent?.event_date || ''} required className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-emerald-700" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block font-bold mb-1 text-slate-700">نوع الحدث</label>
+                    <button 
+                      type="button" 
+                      onClick={() => handleAddDynamicOption('نوع الحدث', setEventTypes, eventTypes)}
+                      className="text-xs bg-emerald-50 text-emerald-900 hover:bg-emerald-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-emerald-200 transition"
+                    >
+                      <Plus className="w-3 h-3" /> إضافة
+                    </button>
+                  </div>
+                  <select name="event_type" defaultValue={editingEvent?.event_type || ''} className="w-full border rounded-xl p-2.5 outline-none bg-slate-50/50 focus:ring-2 focus:ring-emerald-700">
+                    <option value="">-- اختر نوع الحدث --</option>
+                    {eventTypes.map((item, idx) => <option key={idx} value={item}>{item}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block font-bold mb-1 text-slate-700">حالة الحدث</label>
+                    <button 
+                      type="button" 
+                      onClick={() => handleAddDynamicOption('حالة الحدث', setEventStatuses, eventStatuses)}
+                      className="text-xs bg-emerald-50 text-emerald-900 hover:bg-emerald-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-emerald-200 transition"
+                    >
+                      <Plus className="w-3 h-3" /> إضافة
+                    </button>
+                  </div>
+                  <select name="event_status" defaultValue={editingEvent?.event_status || ''} className="w-full border rounded-xl p-2.5 outline-none bg-slate-50/50 focus:ring-2 focus:ring-emerald-700">
+                    <option value="">-- اختر حالة الحدث --</option>
+                    {eventStatuses.map((item, idx) => <option key={idx} value={item}>{item}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-700">ملاحظات</label>
+                <textarea name="notes" defaultValue={editingEvent?.notes || ''} rows={3} className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-emerald-700"></textarea>
+              </div>
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <button type="button" onClick={() => { setShowEventModal(false); setEditingEvent(null); }} className="px-5 py-2.5 bg-gray-100 rounded-xl font-bold">إلغاء</button>
+                <button type="submit" className="px-5 py-2.5 bg-emerald-700 text-white rounded-xl font-bold shadow">{editingEvent ? 'تحديث البيانات' : 'حفظ الحدث'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* القائمة الجانبية السريعة */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-50 flex">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-xs" onClick={() => setSidebarOpen(false)}></div>
+          <div className="relative w-80 bg-slate-950 text-white h-full shadow-2xl p-6 flex flex-col justify-between z-10 border-l border-slate-800">
+            <div>
+              <div className="flex justify-between items-center mb-8 border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-600/30 rounded-xl flex items-center justify-center text-blue-400 font-black border border-blue-500/30">
+                    <Shield className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm">{userOfficeInfo.officeName}</h3>
+                    <p className="text-[10px] text-blue-400">لوحة التحكم القانونية</p>
+                  </div>
+                </div>
+                <button onClick={() => setSidebarOpen(false)} className="p-2 hover:bg-slate-900 rounded-xl text-slate-400 hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="space-y-2">
+                <button 
+                  onClick={() => { setSidebarOpen(false); setEditingClient(null); setShowClientModal(true); }}
+                  className="w-full text-right px-4 py-3 bg-blue-900/40 hover:bg-blue-900/70 text-blue-200 rounded-xl font-bold text-sm transition flex items-center gap-3 border border-blue-800/50"
+                >
+                  <Users className="w-4 h-4 text-blue-400" /> إضافة موكل جديد
+                </button>
+                <button 
+                  onClick={() => { setSidebarOpen(false); setEditingCase(null); setShowCaseModal(true); }}
+                  className="w-full text-right px-4 py-3 bg-rose-950/40 hover:bg-rose-900/60 text-rose-200 rounded-xl font-bold text-sm transition flex items-center gap-3 border border-rose-900/50"
+                >
+                  <Briefcase className="w-4 h-4 text-rose-400" /> إضافة قضية جديدة
+                </button>
+                <button 
+                  onClick={() => { setSidebarOpen(false); setEditingEvent(null); setShowEventModal(true); }}
+                  className="w-full text-right px-4 py-3 bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-200 rounded-xl font-bold text-sm transition flex items-center gap-3 border border-emerald-900/50"
+                >
+                  <Calendar className="w-4 h-4 text-emerald-400" /> إضافة حدث أو جلسة
+                </button>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-800 pt-4 text-center">
+              <p className="text-xs text-slate-500 font-semibold">{userOfficeInfo.subTitle}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
