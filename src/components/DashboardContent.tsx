@@ -44,11 +44,12 @@ export default function DashboardContent() {
   const [selectedClientIdFilter, setSelectedClientIdFilter] = useState<number | null>(null);
   const [selectedCaseIdFilter, setSelectedCaseIdFilter] = useState<number | null>(null);
   
-  // مفاتيح تحديد لعرض كل السجلات لكل قسم بغض النظر عن القيود الافتراضية أو الفلاتر
   const [showAllClientsOverride, setShowAllClientsOverride] = useState(false);
   const [showAllCasesOverride, setShowAllCasesOverride] = useState(false);
   const [showAllEventsOverride, setShowAllEventsOverride] = useState(false);
   
+  // حالة التحكم في طي وتوسيع قسم العدادات والإحصائيات
+  const [expandStats, setExpandStats] = useState(true);
   const [expandClients, setExpandClients] = useState(true);
   const [expandCases, setExpandCases] = useState(true);
   const [expandEvents, setExpandEvents] = useState(true);
@@ -63,7 +64,6 @@ export default function DashboardContent() {
   const [showMonthlyAgendaModal, setShowMonthlyAgendaModal] = useState(false);
   const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date());
   const [selectedEventDetails, setSelectedEventDetails] = useState<any | null>(null);
-
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const userOfficeInfo = {
@@ -203,7 +203,6 @@ export default function DashboardContent() {
     }
   };
 
-  // تصفية وعرض السجلات (مع تطبيق الحد الافتراضي: 3 موكلين، 5 قضايا، 10 أحداث ما لم يتم تفعيل مفتاح العرض الكامل)
   const filteredClients = clients.filter(c => c.client_name?.toLowerCase().includes(clientSearch.toLowerCase()));
   const displayedClients = showAllClientsOverride ? filteredClients : filteredClients.slice(0, 3);
   
@@ -222,20 +221,19 @@ export default function DashboardContent() {
   const displayedEvents = showAllEventsOverride ? filteredEvents : filteredEvents.slice(0, 10);
 
   const todayStr = new Date().toISOString().split('T')[0];
-  const tomorrowDate = new Date();
-  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-  const tomorrowStr = tomorrowDate.toISOString().split('T')[0];
-  
+  const tomorrowObj = new Date();
+  tomorrowObj.setDate(tomorrowObj.getDate() + 1);
+  const tomorrowStr = tomorrowObj.toISOString().split('T')[0];
+
   const todayEvents = events.filter(ev => ev.event_date === todayStr);
+  const tomorrowEvents = events.filter(ev => ev.event_date === tomorrowStr);
 
   const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
   const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
-
   const year = currentCalendarDate.getFullYear();
   const month = currentCalendarDate.getMonth();
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = getFirstDayOfMonth(year, month);
-
   const monthNames = [
     "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
     "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"
@@ -295,36 +293,92 @@ export default function DashboardContent() {
 
       <div className="p-6 max-w-7xl mx-auto space-y-6">
         
-        {/* مؤشرات الإحصائيات الأساسية */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between border-r-4 border-r-blue-900">
-            <div>
-              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">عدد الموكلين</p>
-              <h3 className="text-3xl font-black text-blue-950 mt-1">{clients.length}</h3>
+        {/* قسم مؤشرات الإحصائيات الأساسية (العدادات) مع زر الطي والتوسيع وأحداث اليوم والغد */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
+          <div className="flex justify-between items-center border-b pb-3 border-blue-900/20">
+            <div className="flex items-center gap-3">
+              <button onClick={() => setExpandStats(!expandStats)} className="text-blue-900 hover:text-black">
+                {expandStats ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+              </button>
+              <h3 className="text-lg font-bold text-blue-950 flex items-center gap-2">
+                لوحة العدادات والإحصائيات العامة
+              </h3>
             </div>
-            <div className="p-3.5 bg-blue-50 text-blue-900 rounded-2xl shadow-sm"><Users className="w-6 h-6" /></div>
           </div>
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between border-r-4 border-r-rose-800">
-            <div>
-              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">عدد القضايا</p>
-              <h3 className="text-3xl font-black text-rose-950 mt-1">{cases.length}</h3>
+
+          {expandStats && (
+            <div className="space-y-4 pt-2">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-slate-50 p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between border-r-4 border-r-blue-900">
+                  <div>
+                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">عدد الموكلين</p>
+                    <h3 className="text-3xl font-black text-blue-950 mt-1">{clients.length}</h3>
+                  </div>
+                  <div className="p-3.5 bg-blue-50 text-blue-900 rounded-2xl shadow-sm"><Users className="w-6 h-6" /></div>
+                </div>
+                <div className="bg-slate-50 p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between border-r-4 border-r-rose-800">
+                  <div>
+                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">عدد القضايا</p>
+                    <h3 className="text-3xl font-black text-rose-950 mt-1">{cases.length}</h3>
+                  </div>
+                  <div className="p-3.5 bg-rose-50 text-rose-800 rounded-2xl shadow-sm"><Briefcase className="w-6 h-6" /></div>
+                </div>
+                <div className="bg-slate-50 p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between border-r-4 border-r-emerald-700">
+                  <div>
+                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">إجمالي الأحداث</p>
+                    <h3 className="text-3xl font-black text-emerald-950 mt-1">{events.length}</h3>
+                  </div>
+                  <div className="p-3.5 bg-emerald-50 text-emerald-700 rounded-2xl shadow-sm"><Calendar className="w-6 h-6" /></div>
+                </div>
+                <div className="bg-slate-50 p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between border-r-4 border-r-amber-600">
+                  <div>
+                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">أحداث اليوم</p>
+                    <h3 className="text-3xl font-black text-amber-950 mt-1">{todayEvents.length}</h3>
+                  </div>
+                  <div className="p-3.5 bg-amber-50 text-amber-600 rounded-2xl shadow-sm"><Clock className="w-6 h-6" /></div>
+                </div>
+              </div>
+
+              {/* قسم تفاصيل أحداث اليوم والغد المدمجة */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                <div className="bg-amber-50/50 border border-amber-200/60 p-4 rounded-xl">
+                  <h4 className="font-bold text-amber-900 text-sm mb-2 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-amber-700" /> جلسات وأحداث اليوم ({todayEvents.length})
+                  </h4>
+                  {todayEvents.length === 0 ? (
+                    <p className="text-xs text-slate-500">لا توجد أحداث مسجلة لليوم.</p>
+                  ) : (
+                    <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                      {todayEvents.map((ev, idx) => (
+                        <div key={idx} className="bg-white p-2 rounded-lg border border-amber-100 text-xs flex justify-between items-center">
+                          <span className="font-bold text-amber-950">{ev.event_name}</span>
+                          <span className="text-slate-500 text-[11px]">قضية: {ev.cases?.case_number || '-'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-blue-50/50 border border-blue-200/60 p-4 rounded-xl">
+                  <h4 className="font-bold text-blue-900 text-sm mb-2 flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-blue-700" /> جلسات وأحداث الغد ({tomorrowEvents.length})
+                  </h4>
+                  {tomorrowEvents.length === 0 ? (
+                    <p className="text-xs text-slate-500">لا توجد أحداث مسجلة للغد.</p>
+                  ) : (
+                    <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                      {tomorrowEvents.map((ev, idx) => (
+                        <div key={idx} className="bg-white p-2 rounded-lg border border-blue-100 text-xs flex justify-between items-center">
+                          <span className="font-bold text-blue-950">{ev.event_name}</span>
+                          <span className="text-slate-500 text-[11px]">قضية: {ev.cases?.case_number || '-'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
-            <div className="p-3.5 bg-rose-50 text-rose-800 rounded-2xl shadow-sm"><Briefcase className="w-6 h-6" /></div>
-          </div>
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between border-r-4 border-r-emerald-700">
-            <div>
-              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">إجمالي الأحداث</p>
-              <h3 className="text-3xl font-black text-emerald-950 mt-1">{events.length}</h3>
-            </div>
-            <div className="p-3.5 bg-emerald-50 text-emerald-700 rounded-2xl shadow-sm"><Calendar className="w-6 h-6" /></div>
-          </div>
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between border-r-4 border-r-amber-600">
-            <div>
-              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">أحداث اليوم</p>
-              <h3 className="text-3xl font-black text-amber-950 mt-1">{todayEvents.length}</h3>
-            </div>
-            <div className="p-3.5 bg-amber-50 text-amber-600 rounded-2xl shadow-sm"><Clock className="w-6 h-6" /></div>
-          </div>
+          )}
         </div>
 
         <div className="flex justify-start">
@@ -339,7 +393,7 @@ export default function DashboardContent() {
           </button>
         </div>
 
-        {/* قسم الموكلين (عرض افتراضي 3 موكلين مع مفتاح تحديد لعرض الكل) */}
+        {/* قسم الموكلين */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b pb-3 border-blue-900/20 gap-3">
             <div className="flex items-center gap-3">
@@ -353,7 +407,6 @@ export default function DashboardContent() {
                 </span>
               </h3>
             </div>
-
             <div className="flex items-center gap-4">
               <label className="flex items-center gap-2 text-xs font-bold text-slate-700 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition">
                 <input
@@ -364,13 +417,11 @@ export default function DashboardContent() {
                 />
                 <span>عرض كل الموكلين (تجاوز حد 3)</span>
               </label>
-
               <button onClick={() => { setEditingClient(null); setShowClientModal(true); }} className="bg-blue-900 hover:bg-blue-950 text-white px-4 py-2 rounded-xl flex items-center gap-1.5 text-sm font-bold shadow-sm transition">
                 <Plus className="w-4 h-4" /> إضافة موكل جديد
               </button>
             </div>
           </div>
-
           <div className="relative w-full">
             <Search className="w-5 h-5 text-gray-400 absolute right-4 top-3.5" />
             <input
@@ -433,7 +484,7 @@ export default function DashboardContent() {
           )}
         </div>
 
-        {/* قسم القضايا (عرض افتراضي 5 قضايا مع اسم الموكل، ومفتاح تحديد لعرض الكل) */}
+        {/* قسم القضايا */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b pb-3 border-rose-900/20 gap-3">
             <div className="flex items-center gap-3">
@@ -452,7 +503,6 @@ export default function DashboardContent() {
                 )}
               </h3>
             </div>
-
             <div className="flex items-center gap-4">
               <label className="flex items-center gap-2 text-xs font-bold text-slate-700 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition">
                 <input
@@ -463,13 +513,11 @@ export default function DashboardContent() {
                 />
                 <span>عرض كل القضايا (تجاوز حد 5 وإلغاء فلتر الموكل)</span>
               </label>
-
               <button onClick={() => { setEditingCase(null); setShowCaseModal(true); }} className="bg-rose-800 hover:bg-rose-900 text-white px-4 py-2 rounded-xl flex items-center gap-1.5 text-sm font-bold shadow-sm transition">
                 <Plus className="w-4 h-4" /> إضافة قضية جديدة
               </button>
             </div>
           </div>
-
           <div className="relative w-full">
             <Search className="w-5 h-5 text-gray-400 absolute right-4 top-3.5" />
             <input
@@ -530,7 +578,7 @@ export default function DashboardContent() {
           )}
         </div>
 
-        {/* قسم الأحداث (عرض افتراضي 10 أحداث مع اسم الخصم، ومفتاح تحديد لعرض الكل) */}
+        {/* قسم الأحداث */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b pb-3 border-emerald-900/20 gap-3">
             <div className="flex items-center gap-3">
@@ -549,7 +597,6 @@ export default function DashboardContent() {
                 )}
               </h3>
             </div>
-
             <div className="flex items-center gap-4">
               <label className="flex items-center gap-2 text-xs font-bold text-slate-700 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition">
                 <input
@@ -560,13 +607,11 @@ export default function DashboardContent() {
                 />
                 <span>عرض كل الأحداث (تجاوز حد 10 وإلغاء فلتر القضية)</span>
               </label>
-
               <button onClick={() => { setEditingEvent(null); setShowEventModal(true); }} className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 rounded-xl flex items-center gap-1.5 text-sm font-bold shadow-sm transition">
                 <Plus className="w-4 h-4" /> إضافة حدث جديد
               </button>
             </div>
           </div>
-
           <div className="relative w-full">
             <Search className="w-5 h-5 text-gray-400 absolute right-4 top-3.5" />
             <input
@@ -626,7 +671,7 @@ export default function DashboardContent() {
 
       </div>
 
-      {/* نافذة الأجندة الشهرية مع تفاصيل الأحداث */}
+      {/* نافذة الأجندة الشهرية */}
       {showMonthlyAgendaModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl max-w-5xl w-full p-6 shadow-2xl max-h-[95vh] overflow-y-auto border border-slate-100 flex flex-col justify-between">
@@ -645,7 +690,6 @@ export default function DashboardContent() {
                   <X className="w-6 h-6 text-gray-500" />
                 </button>
               </div>
-
               <div className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl mb-4 border border-slate-100">
                 <button
                   onClick={() => { setCurrentCalendarDate(new Date(year, month - 1, 1)); setSelectedEventDetails(null); }}
@@ -663,7 +707,6 @@ export default function DashboardContent() {
                   الشهر القادم <ChevronLeft className="w-4 h-4" />
                 </button>
               </div>
-
               <div className="grid grid-cols-7 gap-2 text-center font-bold text-xs text-blue-950 mb-2 bg-blue-50/50 py-2.5 rounded-xl">
                 <div>الأحد</div>
                 <div>الإثنين</div>
@@ -673,12 +716,10 @@ export default function DashboardContent() {
                 <div>الجمعة</div>
                 <div>السبت</div>
               </div>
-
               <div className="grid grid-cols-7 gap-2">
                 {calendarDays.map((item, index) => {
                   const dayEvents = item.dateStr ? events.filter(ev => ev.event_date === item.dateStr) : [];
                   const isToday = item.dateStr === todayStr;
-
                   return (
                     <div
                       key={index}
@@ -700,7 +741,6 @@ export default function DashboardContent() {
                           </span>
                         )}
                       </div>
-
                       <div className="space-y-1 mt-1 overflow-hidden">
                         {dayEvents.map((ev, i) => {
                           const isSelectedEv = selectedEventDetails?.id === ev.id;
@@ -725,7 +765,6 @@ export default function DashboardContent() {
                   );
                 })}
               </div>
-
               {selectedEventDetails ? (
                 <div className="mt-6 p-5 bg-gradient-to-r from-blue-950 to-slate-900 text-white rounded-2xl shadow-xl border border-blue-800/60 space-y-3">
                   <div className="flex justify-between items-center border-b border-blue-800/50 pb-3">
@@ -774,7 +813,6 @@ export default function DashboardContent() {
                 </div>
               )}
             </div>
-
             <div className="flex justify-end gap-2 pt-6 border-t mt-6">
               <button 
                 type="button" 
@@ -788,7 +826,7 @@ export default function DashboardContent() {
         </div>
       )}
 
-      {/* نافذة إضافة أو تعديل موكل */}
+      {/* نوافذ الحوار الخاصة بالمتاجر والبيانات (الموكلين، القضايا، الأحداث) */}
       {showClientModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto border border-slate-100">
@@ -898,7 +936,6 @@ export default function DashboardContent() {
         </div>
       )}
 
-      {/* نافذة إضافة أو تعديل قضية */}
       {showCaseModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto border border-slate-100">
@@ -1002,7 +1039,6 @@ export default function DashboardContent() {
         </div>
       )}
 
-      {/* نافذة إضافة أو تعديل حدث أو جلسة */}
       {showEventModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto border border-slate-100">
@@ -1024,7 +1060,7 @@ export default function DashboardContent() {
                 </div>
                 <select name="case_id" defaultValue={editingEvent?.case_id || ''} required className="w-full border rounded-xl p-2.5 outline-none bg-emerald-50/50 focus:ring-2 focus:ring-emerald-700">
                   <option value="">-- اختر القضية التابع لها الحدث --</option>
-                  {cases.map(cs => <option key={cs.id} value={cs.id}>قضية رقم: {cs.case_number} (الخصم: {cs.opponent_name || '-'})</option>)}
+                  {cases.map(cs => <option key={cs.id} value={cs.id}>قضية رقم: {cs.case_number} (الخصم: {cs.opponent_name || '-'})^{' '}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -1084,7 +1120,7 @@ export default function DashboardContent() {
         </div>
       )}
 
-      {/* القائمة الجانبية السريعة */}
+      {/* القائمة الجانبية */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 flex">
           <div className="fixed inset-0 bg-black/50 backdrop-blur-xs" onClick={() => setSidebarOpen(false)}></div>
