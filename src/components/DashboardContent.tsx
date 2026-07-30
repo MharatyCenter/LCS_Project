@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '../Services/supabaseClient';
 import {
   Users,
@@ -81,10 +82,12 @@ export default function DashboardContent() {
     const printStyle = document.createElement('style');
     printStyle.id = 'app-print-style';
     printStyle.innerHTML = `
+      @page {
+        margin: 14mm 12mm;
+      }
       @media print {
-        body * { visibility: hidden; }
-        #print-area, #print-area * { visibility: visible; }
-        #print-area { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; }
+        #app-shell { display: none !important; }
+        #print-portal { display: block !important; }
       }
     `;
     document.head.appendChild(printStyle);
@@ -104,6 +107,16 @@ export default function DashboardContent() {
       if (eventsData) setEvents(eventsData);
     } catch (error) {
       console.error('Error fetching data:', error);
+    }
+  };
+
+  const handleLogout = async () => {
+    if (confirm('هل أنت متأكد من تسجيل الخروج؟')) {
+      await supabase.auth.signOut();
+      localStorage.removeItem('lawyer_id');
+      localStorage.removeItem('lawyer_name');
+      localStorage.removeItem('office_name');
+      window.location.reload();
     }
   };
 
@@ -141,9 +154,10 @@ export default function DashboardContent() {
   };
 
   const buildInfoTable = (dataObj: any) => {
+    const hiddenKeys = ['id', 'client_id', 'case_id'];
     let html = '<table style="width: 100%; border-collapse: collapse; margin-top: 8px;">';
     for (const [key, value] of Object.entries(dataObj)) {
-      if (key !== 'id' && typeof value !== 'object') {
+      if (!hiddenKeys.includes(key) && typeof value !== 'object') {
         const label = fieldLabels[key] || key;
         html += `
           <tr style="border-bottom: 1px solid #e2e8f0;">
@@ -215,6 +229,134 @@ export default function DashboardContent() {
     openPrintFrame(`تقرير الموكل - ${client.client_name}`, contentHtml);
   };
 
+  const handlePrintCaseReport = (caseObj: any) => {
+    const relatedClient = clients.find(c => c.id === caseObj.client_id);
+    const caseEvents = events.filter(ev => ev.case_id === caseObj.id);
+
+    let contentHtml = '<div style="font-family: \'Cairo\', sans-serif; direction: rtl; padding: 20px; color: #111;">';
+    contentHtml += `<h2 style="text-align: center; color: #1e3a8a; border-bottom: 2px solid #1e3a8a; padding-bottom: 10px;">${userOfficeInfo.officeName}</h2>`;
+    contentHtml += `<h3 style="text-align: center; color: #334155; margin-bottom: 20px;">تقرير القضية رقم: ${caseObj.case_number || '-'}</h3>`;
+
+    if (relatedClient) {
+      contentHtml += '<div style="background: #eff6ff; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 13px; color: #1e3a8a;">';
+      contentHtml += `<strong>الموكل صاحب القضية:</strong> ${relatedClient.client_name} ${relatedClient.phone ? '— ' + relatedClient.phone : ''}`;
+      contentHtml += '</div>';
+    }
+
+    contentHtml += '<h4 style="color: #1e3a8a; background: #eff6ff; padding: 8px 12px; border-radius: 6px; margin-bottom: 4px;">بيانات القضية</h4>';
+    contentHtml += buildInfoTable(caseObj);
+
+    contentHtml += '<h4 style="color: #1e3a8a; margin-top: 24px; margin-bottom: 10px;">الأحداث والجلسات المرتبطة</h4>';
+
+    if (caseEvents.length === 0) {
+      contentHtml += '<p style="font-size: 13px; color: #64748b;">لا توجد أحداث مسجلة لهذه القضية.</p>';
+    } else {
+      contentHtml += '<table style="width: 100%; border-collapse: collapse;">';
+      contentHtml += `
+        <tr style="background: #1e3a8a; color: #fff;">
+          <th style="text-align: right; padding: 8px 10px; font-size: 12px;">اسم الحدث</th>
+          <th style="text-align: right; padding: 8px 10px; font-size: 12px;">التاريخ</th>
+          <th style="text-align: right; padding: 8px 10px; font-size: 12px;">النوع</th>
+          <th style="text-align: right; padding: 8px 10px; font-size: 12px;">الحالة</th>
+        </tr>`;
+      caseEvents.forEach((ev) => {
+        contentHtml += `
+          <tr style="border-bottom: 1px solid #e2e8f0;">
+            <td style="padding: 7px 10px; font-size: 12px;">${ev.event_name || '-'}</td>
+            <td style="padding: 7px 10px; font-size: 12px;">${ev.event_date || '-'}</td>
+            <td style="padding: 7px 10px; font-size: 12px;">${ev.event_type || '-'}</td>
+            <td style="padding: 7px 10px; font-size: 12px;">${ev.event_status || '-'}</td>
+          </tr>`;
+      });
+      contentHtml += '</table>';
+    }
+
+    contentHtml += `<div style="margin-top: 30px; text-align: center; font-size: 12px; color: #64748b;">تاريخ الطباعة: ${new Date().toLocaleDateString('ar-EG')}</div>`;
+    contentHtml += '</div>';
+
+    openPrintFrame(`تقرير القضية - ${caseObj.case_number}`, contentHtml);
+  };
+
+  const handlePrintEventReport = (eventObj: any) => {
+    const relatedCase = eventObj.cases || cases.find(cs => cs.id === eventObj.case_id);
+    const relatedClient = relatedCase ? clients.find(c => c.id === relatedCase.client_id) : null;
+
+    let contentHtml = '<div style="font-family: \'Cairo\', sans-serif; direction: rtl; padding: 20px; color: #111;">';
+    contentHtml += `<h2 style="text-align: center; color: #1e3a8a; border-bottom: 2px solid #1e3a8a; padding-bottom: 10px;">${userOfficeInfo.officeName}</h2>`;
+    contentHtml += `<h3 style="text-align: center; color: #334155; margin-bottom: 20px;">تقرير حدث / جلسة: ${eventObj.event_name || '-'}</h3>`;
+
+    contentHtml += '<h4 style="color: #1e3a8a; background: #eff6ff; padding: 8px 12px; border-radius: 6px; margin-bottom: 4px;">بيانات الحدث</h4>';
+    contentHtml += buildInfoTable(eventObj);
+
+    if (relatedCase || relatedClient) {
+      contentHtml += '<h4 style="color: #1e3a8a; margin-top: 24px; margin-bottom: 6px;">سياق القضية والموكل</h4>';
+      contentHtml += '<div style="background: #eff6ff; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #1e3a8a; line-height: 1.9;">';
+      if (relatedCase) {
+        contentHtml += `<div><strong>رقم القضية:</strong> ${relatedCase.case_number || '-'}</div>`;
+        contentHtml += `<div><strong>الخصم:</strong> ${relatedCase.opponent_name || '-'}</div>`;
+      }
+      if (relatedClient) {
+        contentHtml += `<div><strong>الموكل:</strong> ${relatedClient.client_name} ${relatedClient.phone ? '— ' + relatedClient.phone : ''}</div>`;
+      }
+      contentHtml += '</div>';
+    }
+
+    contentHtml += `<div style="margin-top: 30px; text-align: center; font-size: 12px; color: #64748b;">تاريخ الطباعة: ${new Date().toLocaleDateString('ar-EG')}</div>`;
+    contentHtml += '</div>';
+
+    openPrintFrame(`تقرير حدث - ${eventObj.event_name}`, contentHtml);
+  };
+
+  const handlePrintMonthlyAgenda = () => {
+    const monthEvents = events.filter(ev => {
+      if (!ev.event_date) return false;
+      const [evYear, evMonth] = ev.event_date.split('-').map(Number);
+      return evYear === year && (evMonth - 1) === month;
+    }).sort((a, b) => (a.event_date > b.event_date ? 1 : -1));
+
+    let contentHtml = '<div style="font-family: \'Cairo\', sans-serif; direction: rtl; padding: 20px; color: #111;">';
+    contentHtml += `<h2 style="text-align: center; color: #1e3a8a; border-bottom: 2px solid #1e3a8a; padding-bottom: 10px;">${userOfficeInfo.officeName}</h2>`;
+    contentHtml += `<h3 style="text-align: center; color: #334155; margin-bottom: 20px;">أجندة شهر ${monthNames[month]} ${year}</h3>`;
+
+    if (monthEvents.length === 0) {
+      contentHtml += '<p style="font-size: 13px; color: #64748b; text-align: center;">لا توجد أحداث مسجلة خلال هذا الشهر.</p>';
+    } else {
+      const groupedByDate: Record<string, any[]> = {};
+      monthEvents.forEach(ev => {
+        if (!groupedByDate[ev.event_date]) groupedByDate[ev.event_date] = [];
+        groupedByDate[ev.event_date].push(ev);
+      });
+
+      Object.keys(groupedByDate).forEach(dateStr => {
+        contentHtml += '<div style="margin-bottom: 18px; page-break-inside: avoid;">';
+        contentHtml += `<div style="background: #1e3a8a; color: #fff; font-weight: bold; padding: 8px 14px; border-radius: 6px 6px 0 0; font-size: 13px;">${dateStr}</div>`;
+        contentHtml += '<table style="width: 100%; border-collapse: collapse; border: 1px solid #1e3a8a; border-top: none;">';
+        contentHtml += `
+          <tr style="background: #f1f5f9;">
+            <th style="text-align: right; padding: 7px 10px; font-size: 12px; color: #0f172a;">اسم الحدث</th>
+            <th style="text-align: right; padding: 7px 10px; font-size: 12px; color: #0f172a;">النوع</th>
+            <th style="text-align: right; padding: 7px 10px; font-size: 12px; color: #0f172a;">رقم القضية</th>
+            <th style="text-align: right; padding: 7px 10px; font-size: 12px; color: #0f172a;">الموكل</th>
+          </tr>`;
+        groupedByDate[dateStr].forEach((ev) => {
+          contentHtml += `
+            <tr style="border-bottom: 1px solid #e2e8f0;">
+              <td style="padding: 6px 10px; font-size: 12px;">${ev.event_name || '-'}</td>
+              <td style="padding: 6px 10px; font-size: 12px;">${ev.event_type || '-'}</td>
+              <td style="padding: 6px 10px; font-size: 12px;">${ev.cases?.case_number || '-'}</td>
+              <td style="padding: 6px 10px; font-size: 12px;">${ev.cases?.clients?.client_name || '-'}</td>
+            </tr>`;
+        });
+        contentHtml += '</table></div>';
+      });
+    }
+
+    contentHtml += `<div style="margin-top: 30px; text-align: center; font-size: 12px; color: #64748b;">تاريخ الطباعة: ${new Date().toLocaleDateString('ar-EG')}</div>`;
+    contentHtml += '</div>';
+
+    openPrintFrame(`أجندة شهر ${monthNames[month]} ${year}`, contentHtml);
+  };
+
   const handlePrintRecord = (title: string, dataObj: any) => {
     let contentHtml = '<div style="font-family: \'Cairo\', sans-serif; direction: rtl; padding: 20px; color: #111;">';
     contentHtml += `<h2 style="text-align: center; color: #1e3a8a; border-bottom: 2px solid #1e3a8a; padding-bottom: 10px;">${userOfficeInfo.officeName}</h2>`;
@@ -249,6 +391,7 @@ export default function DashboardContent() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const clientData = {
+      user_id: localStorage.getItem('lawyer_id'),
       client_name: formData.get('client_name'),
       contract_date: formData.get('contract_date') || null,
       power_of_attorney_type: formData.get('power_of_attorney_type'),
@@ -280,6 +423,7 @@ export default function DashboardContent() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const caseData = {
+      user_id: localStorage.getItem('lawyer_id'),
       case_number: formData.get('case_number'),
       case_date: formData.get('case_date') || null,
       case_type: formData.get('case_type'),
@@ -310,6 +454,7 @@ export default function DashboardContent() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const eventData = {
+      user_id: localStorage.getItem('lawyer_id'),
       event_date: formData.get('event_date') || null,
       event_type: formData.get('event_type'),
       event_name: formData.get('event_name'),
@@ -384,7 +529,7 @@ export default function DashboardContent() {
   const selectedCaseObj = cases.find(cs => cs.id === selectedCaseIdFilter);
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] text-gray-900" style={{ fontFamily: "'Cairo', sans-serif" }} dir="rtl">
+    <div id="app-shell" className="min-h-screen bg-[#F8F9FA] text-gray-900" style={{ fontFamily: "'Cairo', sans-serif" }} dir="rtl">
       <header className="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white shadow-md px-6 py-4 flex justify-between items-center sticky top-0 z-40 border-b border-blue-900/50">
         <div className="flex items-center gap-4">
           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 bg-blue-900/60 hover:bg-blue-800 rounded-xl transition text-blue-200 border border-blue-700/50">
@@ -403,6 +548,9 @@ export default function DashboardContent() {
         <div className="flex items-center gap-3">
           <button onClick={() => { setSelectedClientIdFilter(null); setSelectedCaseIdFilter(null); setShowAllClientsOverride(false); setShowAllCasesOverride(false); setShowAllEventsOverride(false); }} className="text-xs bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl font-bold text-white transition border border-white/10 backdrop-blur-sm">
             إلغاء الفلاتر النشطة
+          </button>
+          <button onClick={handleLogout} className="text-xs bg-rose-900/60 hover:bg-rose-800 px-4 py-2 rounded-xl font-bold text-white transition border border-rose-700/50">
+            تسجيل الخروج
           </button>
         </div>
       </header>
@@ -625,7 +773,7 @@ export default function DashboardContent() {
                         <td className="p-3">{cs.case_date || '-'}</td>
                         <td className="p-3 font-semibold text-slate-800">{cs.opponent_name || '-'}</td>
                         <td className="p-3 flex justify-center gap-2">
-                          <button onClick={(e) => { e.stopPropagation(); handlePrintRecord(`قضية رقم ${cs.case_number}`, cs); }} className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded-lg transition" title="طباعة تفاصيل القضية">
+                          <button onClick={(e) => { e.stopPropagation(); handlePrintCaseReport(cs); }} className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded-lg transition" title="طباعة تقرير القضية">
                             <Printer className="w-4 h-4" />
                           </button>
                           <button onClick={(e) => { e.stopPropagation(); setEditingCase(cs); setShowCaseModal(true); }} className="p-1.5 text-rose-800 hover:bg-rose-50 rounded-lg transition" title="تعديل القضية">
@@ -700,7 +848,7 @@ export default function DashboardContent() {
                         <td className="p-3"><span className="px-2.5 py-1 bg-emerald-50 text-emerald-800 rounded-full text-xs font-semibold">{ev.event_type}</span></td>
                         <td className="p-3">{ev.cases?.case_number || '-'}</td>
                         <td className="p-3 flex justify-center gap-2">
-                          <button onClick={() => handlePrintRecord(`حدث / جلسة: ${ev.event_name}`, ev)} className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded-lg transition" title="طباعة تفاصيل الحدث">
+                          <button onClick={() => handlePrintEventReport(ev)} className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded-lg transition" title="طباعة تقرير الحدث">
                             <Printer className="w-4 h-4" />
                           </button>
                           <button onClick={() => { setEditingEvent(ev); setShowEventModal(true); }} className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded-lg transition" title="تعديل الحدث">
@@ -799,7 +947,7 @@ export default function DashboardContent() {
                       <Info className="w-5 h-5" /> تفاصيل الحدث / الجلسة المختارة
                     </h5>
                     <div className="flex gap-2">
-                      <button onClick={() => handlePrintRecord(`حدث: ${selectedEventDetails.event_name}`, selectedEventDetails)} className="text-xs text-emerald-300 hover:text-white bg-emerald-900/50 hover:bg-emerald-800 px-3 py-1 rounded-xl font-bold transition flex items-center gap-1 border border-emerald-700">
+                      <button onClick={() => handlePrintEventReport(selectedEventDetails)} className="text-xs text-emerald-300 hover:text-white bg-emerald-900/50 hover:bg-emerald-800 px-3 py-1 rounded-xl font-bold transition flex items-center gap-1 border border-emerald-700">
                         <Printer className="w-3.5 h-3.5" /> طباعة هذا الحدث
                       </button>
                       <button onClick={() => setSelectedEventDetails(null)} className="text-xs text-slate-300 hover:text-white bg-white/10 hover:bg-white/20 px-3 py-1 rounded-xl font-bold transition">
@@ -843,6 +991,9 @@ export default function DashboardContent() {
             </div>
 
             <div className="flex justify-end gap-2 pt-6 border-t mt-6">
+              <button type="button" onClick={handlePrintMonthlyAgenda} className="px-6 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold shadow transition flex items-center gap-2">
+                <Printer className="w-4 h-4" /> طباعة أجندة الشهر
+              </button>
               <button type="button" onClick={() => setShowMonthlyAgendaModal(false)} className="px-6 py-2.5 bg-blue-900 hover:bg-blue-950 text-white rounded-xl font-bold shadow transition">
                 إغلاق الأجندة
               </button>
@@ -1119,7 +1270,7 @@ export default function DashboardContent() {
               </div>
             </div>
             <div className="overflow-y-auto p-4 bg-slate-100">
-              <div id="print-area" className="bg-white shadow-sm mx-auto" style={{ maxWidth: '210mm' }} dangerouslySetInnerHTML={{ __html: printPreview.html }} />
+              <div id="print-preview-onscreen" className="bg-white shadow-sm mx-auto" style={{ maxWidth: '210mm' }} dangerouslySetInnerHTML={{ __html: printPreview.html }} />
             </div>
           </div>
         </div>
@@ -1162,6 +1313,11 @@ export default function DashboardContent() {
             </div>
           </div>
         </div>
+      )}
+
+      {printPreview && createPortal(
+        <div id="print-portal" style={{ display: 'none' }} dangerouslySetInnerHTML={{ __html: printPreview.html }} />,
+        document.body
       )}
     </div>
   );

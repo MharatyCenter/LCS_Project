@@ -61,18 +61,21 @@ export default function AuthManager({ onAuthSuccess }: Props) {
 
         if (error) throw error;
 
+        const authUserId = data.user?.id || '';
+
         localStorage.setItem('saved_lawyer_email', form.email);
 
+        // نبحث عن بيانات المكتب المرتبطة بحساب الدخول ده تحديداً (مش بالإيميل فقط)
         const { data: lawyerData } = await supabase
           .from('lawyers')
           .select('*')
-          .eq('email', form.email)
-          .single();
+          .eq('user_id', authUserId)
+          .maybeSingle();
 
-        localStorage.setItem('lawyer_id', data.user?.id || '');
+        localStorage.setItem('lawyer_id', authUserId);
         localStorage.setItem('lawyer_name', lawyerData?.name || form.email.split('@')[0]);
         localStorage.setItem('office_name', lawyerData?.specialization || 'المكتب القانوني');
-        
+
         onAuthSuccess();
       } else {
         const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -87,6 +90,7 @@ export default function AuthManager({ onAuthSuccess }: Props) {
             .from('lawyers')
             .insert([
               {
+                user_id: authData.user.id,
                 name: form.username,
                 email: form.email,
                 specialization: form.officeName,
@@ -101,7 +105,7 @@ export default function AuthManager({ onAuthSuccess }: Props) {
         localStorage.setItem('lawyer_id', authData.user?.id || '');
         localStorage.setItem('lawyer_name', form.username);
         localStorage.setItem('office_name', form.officeName || 'مكتب قانوني جديد');
-        
+
         onAuthSuccess();
       }
     } catch (err: any) {

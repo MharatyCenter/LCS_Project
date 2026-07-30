@@ -9,13 +9,15 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-// 💡 استخدام الاستدعاء المباشر من الحزمة الشاملة لحل خطأ "createClient is not defined"
+// 💡 persistSession: true عشان تفضل جلسة الدخول شغالة بعد أي Refresh للصفحة
+// (لازم تكون true عشان حماية RLS تفضل تعرف مين المستخدم الحالي)
 export const supabase = Supabase.createClient(supabaseUrl, supabaseAnonKey, {
-  auth: { persistSession: false },
+  auth: { persistSession: true },
 });
 
 export type Lawyer = {
   id: number;
+  user_id?: string | null;
   name: string;
   email: string | null;
   phone: string | null;
