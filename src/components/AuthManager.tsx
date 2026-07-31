@@ -74,7 +74,7 @@ export default function AuthManager({ onAuthSuccess }: Props) {
 
         localStorage.setItem('lawyer_id', authUserId);
         localStorage.setItem('lawyer_name', lawyerData?.name || form.email.split('@')[0]);
-        localStorage.setItem('office_name', lawyerData?.specialization || 'المكتب القانوني');
+        localStorage.setItem('office_name', lawyerData?.office_name || lawyerData?.specialization || 'المكتب القانوني');
 
         onAuthSuccess();
       } else {
@@ -93,7 +93,7 @@ export default function AuthManager({ onAuthSuccess }: Props) {
                 user_id: authData.user.id,
                 name: form.username,
                 email: form.email,
-                specialization: form.officeName,
+                office_name: form.officeName,
                 status: 'active'
               }
             ]);

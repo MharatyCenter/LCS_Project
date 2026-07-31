@@ -19,7 +19,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Info,
-  Printer
+  Printer,
+  ImagePlus,
+  Settings,
+  MessageCircle,
+  UserCog
 } from 'lucide-react';
 
 export default function DashboardContent() {
@@ -67,11 +71,18 @@ export default function DashboardContent() {
   const [selectedEventDetails, setSelectedEventDetails] = useState<any | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [printPreview, setPrintPreview] = useState<{ title: string; html: string } | null>(null);
-
-  const userOfficeInfo = {
-    officeName: "مكتب الأستاذ المحامي / عكاشة",
-    subTitle: "النظام القانوني الموحد"
-  };
+  const [userOfficeInfo, setUserOfficeInfo] = useState({
+    officeName: localStorage.getItem('office_name') || 'المكتب القانوني',
+    subTitle: 'النظام القانوني الموحد',
+    logoUrl: null as string | null,
+  });
+  const [logoUploading, setLogoUploading] = useState(false);
+  const logoInputRef = React.useRef<HTMLInputElement>(null);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showContactModal, setShowContactModal] = useState(false);
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [settingsOfficeName, setSettingsOfficeName] = useState('');
+  const [settingsSaving, setSettingsSaving] = useState(false);
 
   useEffect(() => {
     const link = document.createElement('link');
@@ -93,7 +104,86 @@ export default function DashboardContent() {
     document.head.appendChild(printStyle);
 
     fetchAllData();
+    fetchOfficeInfo();
   }, []);
+
+  const fetchOfficeInfo = async () => {
+    const userId = localStorage.getItem('lawyer_id');
+    if (!userId) return;
+    const { data, error } = await supabase
+      .from('lawyers')
+      .select('office_name, specialization, logo_url')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!error && data) {
+      setUserOfficeInfo((prev) => ({
+        ...prev,
+        officeName: data.office_name || data.specialization || prev.officeName,
+        logoUrl: data.logo_url || null,
+      }));
+    }
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const userId = localStorage.getItem('lawyer_id');
+    if (!userId) return;
+
+    setLogoUploading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const filePath = `${userId}/logo.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('logos')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage.from('logos').getPublicUrl(filePath);
+      const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+
+      const { error: updateError } = await supabase
+        .from('lawyers')
+        .update({ logo_url: publicUrl })
+        .eq('user_id', userId);
+
+      if (updateError) throw updateError;
+
+      setUserOfficeInfo((prev) => ({ ...prev, logoUrl: publicUrl }));
+    } catch (err: any) {
+      alert('فشل رفع اللوجو: ' + (err.message || 'خطأ غير متوقع'));
+    } finally {
+      setLogoUploading(false);
+      if (logoInputRef.current) logoInputRef.current.value = '';
+    }
+  };
+
+  const handleSaveOfficeName = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const userId = localStorage.getItem('lawyer_id');
+    if (!userId || !settingsOfficeName.trim()) return;
+
+    setSettingsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('lawyers')
+        .update({ office_name: settingsOfficeName.trim() })
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      setUserOfficeInfo((prev) => ({ ...prev, officeName: settingsOfficeName.trim() }));
+      localStorage.setItem('office_name', settingsOfficeName.trim());
+      setShowSettingsModal(false);
+    } catch (err: any) {
+      alert('فشل حفظ اسم المكتب: ' + (err.message || 'خطأ غير متوقع'));
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
 
   const fetchAllData = async () => {
     try {
@@ -536,8 +626,27 @@ export default function DashboardContent() {
             <Menu className="w-6 h-6" />
           </button>
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 bg-blue-600/30 rounded-xl flex items-center justify-center text-blue-300 font-black shadow-inner border border-blue-500/30">
-              <Shield className="w-6 h-6" />
+            <div className="relative group/logo">
+              <div className="w-11 h-11 bg-blue-600/30 rounded-xl flex items-center justify-center text-blue-300 font-black shadow-inner border border-blue-500/30 overflow-hidden">
+                {userOfficeInfo.logoUrl ? (
+                  <img src={userOfficeInfo.logoUrl} alt="لوجو المكتب" className="w-full h-full object-cover" />
+                ) : (
+                  <Shield className="w-6 h-6" />
+                )}
+              </div>
+              <button
+                onClick={() => logoInputRef.current?.click()}
+                disabled={logoUploading}
+                title="تغيير لوجو المكتب"
+                className="absolute -bottom-1 -left-1 w-5 h-5 bg-emerald-600 hover:bg-emerald-500 rounded-full flex items-center justify-center border-2 border-slate-900 opacity-0 group-hover/logo:opacity-100 transition"
+              >
+                {logoUploading ? (
+                  <span className="w-2.5 h-2.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <ImagePlus className="w-3 h-3 text-white" />
+                )}
+              </button>
+              <input ref={logoInputRef} type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
             </div>
             <div className="text-right">
               <h2 className="font-bold text-white text-base tracking-wide">{userOfficeInfo.officeName}</h2>
@@ -546,9 +655,6 @@ export default function DashboardContent() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={() => { setSelectedClientIdFilter(null); setSelectedCaseIdFilter(null); setShowAllClientsOverride(false); setShowAllCasesOverride(false); setShowAllEventsOverride(false); }} className="text-xs bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl font-bold text-white transition border border-white/10 backdrop-blur-sm">
-            إلغاء الفلاتر النشطة
-          </button>
           <button onClick={handleLogout} className="text-xs bg-rose-900/60 hover:bg-rose-800 px-4 py-2 rounded-xl font-bold text-white transition border border-rose-700/50">
             تسجيل الخروج
           </button>
@@ -1307,9 +1413,97 @@ export default function DashboardContent() {
                   <Calendar className="w-4 h-4 text-emerald-400" /> إضافة حدث أو جلسة
                 </button>
               </div>
+
+              <div className="mt-6 pt-4 border-t border-slate-800 space-y-2">
+                <button onClick={() => { setSidebarOpen(false); setSettingsOfficeName(userOfficeInfo.officeName); setShowSettingsModal(true); }} className="w-full text-right px-4 py-3 bg-slate-800/60 hover:bg-slate-800 text-slate-200 rounded-xl font-bold text-sm transition flex items-center gap-3 border border-slate-700/50">
+                  <Settings className="w-4 h-4 text-slate-400" /> الإعدادات
+                </button>
+                <button onClick={() => { setSidebarOpen(false); setShowContactModal(true); }} className="w-full text-right px-4 py-3 bg-slate-800/60 hover:bg-slate-800 text-slate-200 rounded-xl font-bold text-sm transition flex items-center gap-3 border border-slate-700/50">
+                  <MessageCircle className="w-4 h-4 text-slate-400" /> تواصل معنا
+                </button>
+                <button onClick={() => { setSidebarOpen(false); setShowAdminModal(true); }} className="w-full text-right px-4 py-3 bg-slate-800/60 hover:bg-slate-800 text-slate-200 rounded-xl font-bold text-sm transition flex items-center gap-3 border border-slate-700/50">
+                  <UserCog className="w-4 h-4 text-slate-400" /> إدارة المشرف
+                </button>
+              </div>
             </div>
             <div className="border-t border-slate-800 pt-4 text-center">
               <p className="text-xs text-slate-500 font-semibold">{userOfficeInfo.subTitle}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* نافذة الإعدادات */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
+            <div className="flex justify-between items-center mb-4 border-b pb-3">
+              <h3 className="text-xl font-bold text-blue-950">الإعدادات</h3>
+              <button onClick={() => setShowSettingsModal(false)} className="p-2 hover:bg-gray-100 rounded-full"><X className="w-6 h-6" /></button>
+            </div>
+            <form onSubmit={handleSaveOfficeName} className="space-y-4 text-sm">
+              <div>
+                <label className="block font-bold mb-1 text-slate-700">اسم المكتب</label>
+                <input type="text" value={settingsOfficeName} onChange={(e) => setSettingsOfficeName(e.target.value)} required className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-900" />
+                <p className="text-xs text-slate-500 mt-1">الاسم ده هيظهر في الهيدر وفي كل التقارير المطبوعة.</p>
+              </div>
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <button type="button" onClick={() => setShowSettingsModal(false)} className="px-5 py-2.5 bg-gray-100 rounded-xl font-bold">إلغاء</button>
+                <button type="submit" disabled={settingsSaving} className="px-5 py-2.5 bg-blue-900 text-white rounded-xl font-bold shadow disabled:opacity-60">
+                  {settingsSaving ? 'جاري الحفظ...' : 'حفظ'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* نافذة تواصل معنا */}
+      {showContactModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
+            <div className="flex justify-between items-center mb-4 border-b pb-3">
+              <h3 className="text-xl font-bold text-blue-950">تواصل معنا</h3>
+              <button onClick={() => setShowContactModal(false)} className="p-2 hover:bg-gray-100 rounded-full"><X className="w-6 h-6" /></button>
+            </div>
+            <div className="space-y-3 text-sm text-slate-700">
+              <p>لأي استفسار أو دعم فني بخصوص النظام، تقدر تتواصل معنا عبر:</p>
+              <div className="bg-slate-50 rounded-xl p-3 border border-slate-200">
+                <strong className="block text-slate-900">البريد الإلكتروني:</strong>
+                <span className="text-blue-700">support@example.com</span>
+              </div>
+              <div className="bg-slate-50 rounded-xl p-3 border border-slate-200">
+                <strong className="block text-slate-900">الهاتف:</strong>
+                <span className="text-blue-700" dir="ltr">01000000000</span>
+              </div>
+              <p className="text-xs text-slate-400">* عدّل البيانات دي في الكود بمعلومات التواصل الحقيقية بتاعتك.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* نافذة إدارة المشرف */}
+      {showAdminModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
+            <div className="flex justify-between items-center mb-4 border-b pb-3">
+              <h3 className="text-xl font-bold text-blue-950">إدارة المشرف</h3>
+              <button onClick={() => setShowAdminModal(false)} className="p-2 hover:bg-gray-100 rounded-full"><X className="w-6 h-6" /></button>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 flex justify-between">
+                <span className="text-slate-500">اسم المشرف</span>
+                <strong className="text-slate-900">{localStorage.getItem('lawyer_name') || '-'}</strong>
+              </div>
+              <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 flex justify-between">
+                <span className="text-slate-500">اسم المكتب</span>
+                <strong className="text-slate-900">{userOfficeInfo.officeName}</strong>
+              </div>
+              <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 flex justify-between">
+                <span className="text-slate-500">حالة الحساب</span>
+                <strong className="text-emerald-700">نشط</strong>
+              </div>
+              <p className="text-xs text-slate-400 text-center pt-2">إدارة حسابات إضافية للموظفين هتُضاف هنا لاحقاً.</p>
             </div>
           </div>
         </div>
