@@ -18,12 +18,16 @@ export const supabase = Supabase.createClient(supabaseUrl, supabaseAnonKey, {
 export type Lawyer = {
   id: number;
   user_id?: string | null;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  specialization: string | null;
-  bar_number: string | null;
-  status: string;
+  lawyer_name: string;
+  syndicate_number?: string | null;
+  degree?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  notes?: string | null;
+  office_name?: string | null;
+  logo_url?: string | null;
+  is_owner?: boolean;
 };
 
 // 🔍 دالة اختبار الاتصال الفعلي للتأكد من سلامة الربط بالـ public schema

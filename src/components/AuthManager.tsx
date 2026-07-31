@@ -65,16 +65,17 @@ export default function AuthManager({ onAuthSuccess }: Props) {
 
         localStorage.setItem('saved_lawyer_email', form.email);
 
-        // نبحث عن بيانات المكتب المرتبطة بحساب الدخول ده تحديداً (مش بالإيميل فقط)
+        // نبحث عن بيانات المكتب المرتبطة بحساب الدخول ده تحديداً (صف صاحب الحساب فقط)
         const { data: lawyerData } = await supabase
           .from('lawyers')
           .select('*')
           .eq('user_id', authUserId)
+          .eq('is_owner', true)
           .maybeSingle();
 
         localStorage.setItem('lawyer_id', authUserId);
-        localStorage.setItem('lawyer_name', lawyerData?.name || form.email.split('@')[0]);
-        localStorage.setItem('office_name', lawyerData?.office_name || lawyerData?.specialization || 'المكتب القانوني');
+        localStorage.setItem('lawyer_name', lawyerData?.lawyer_name || form.email.split('@')[0]);
+        localStorage.setItem('office_name', lawyerData?.office_name || 'المكتب القانوني');
 
         onAuthSuccess();
       } else {
@@ -91,10 +92,10 @@ export default function AuthManager({ onAuthSuccess }: Props) {
             .insert([
               {
                 user_id: authData.user.id,
-                name: form.username,
+                lawyer_name: form.username,
                 email: form.email,
                 office_name: form.officeName,
-                status: 'active'
+                is_owner: true
               }
             ]);
 

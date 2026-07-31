@@ -31,15 +31,23 @@ export default function DashboardContent() {
   const [cases, setCases] = useState<any[]>([]);
   const [events, setEvents] = useState<any[]>([]);
   
-  const [clientTypes, setClientTypes] = useState<string[]>(['فردي', 'شركة', 'مؤسسة']);
-  const [poaTypes, setPoaTypes] = useState<string[]>(['توكيل عام رسمي', 'توكيل خاص', 'توكيل قضايا']);
-  const [sectors, setSectors] = useState<string[]>(['مدني', 'تجاري', 'إداري']);
-  const [entities, setEntities] = useState<string[]>(['محكمة الابتدائية', 'محكمة الاستئناف', 'مجلس الدولة']);
-  const [caseTypes, setCaseTypes] = useState<string[]>(['مدني', 'مستعجل', 'تجاري', 'عمالي', 'إداري']);
-  const [litigationDegrees, setLitigationDegrees] = useState<string[]>(['ابتدائي', 'استئناف', 'نقض']);
-  const [opponentTypes, setOpponentTypes] = useState<string[]>(['مدعى عليه', 'متهم', 'مستأنف ضده']);
-  const [eventTypes, setEventTypes] = useState<string[]>(['جلسة مرافعة', 'تقديم مستندات', 'النطق بالحكم']);
-  const [eventStatuses, setEventStatuses] = useState<string[]>(['قيد الانتظار', 'تم الحجز للحكم', 'منتهي']);
+  const defaultOptionLists: Record<string, string[]> = {
+    client_type: ['فردي', 'شركة', 'مؤسسة'],
+    poa_type: ['توكيل عام رسمي', 'توكيل خاص', 'توكيل قضايا'],
+    sector: ['مدني', 'تجاري', 'إداري'],
+    entity: ['محكمة الابتدائية', 'محكمة الاستئناف', 'مجلس الدولة'],
+    case_type: ['مدني', 'مستعجل', 'تجاري', 'عمالي', 'إداري'],
+    litigation_degree: ['ابتدائي', 'استئناف', 'نقض'],
+    opponent_type: ['مدعى عليه', 'متهم', 'مستأنف ضده'],
+    event_type: ['جلسة مرافعة', 'تقديم مستندات', 'النطق بالحكم'],
+    event_status: ['قيد الانتظار', 'تم الحجز للحكم', 'منتهي'],
+  };
+  const [optionLists, setOptionLists] = useState<Record<string, string[]>>(defaultOptionLists);
+  const [lawyersDirectory, setLawyersDirectory] = useState<any[]>([]);
+  const [showLawyerModal, setShowLawyerModal] = useState(false);
+  const [editingLawyer, setEditingLawyer] = useState<any | null>(null);
+  const [optionPrompt, setOptionPrompt] = useState<{ title: string; listType: string } | null>(null);
+  const [optionPromptValue, setOptionPromptValue] = useState('');
 
   const [clientSearch, setClientSearch] = useState('');
   const [caseSearch, setCaseSearch] = useState('');
@@ -105,24 +113,57 @@ export default function DashboardContent() {
 
     fetchAllData();
     fetchOfficeInfo();
+    fetchOptionLists();
+    fetchLawyersDirectory();
   }, []);
+
+  const fetchOptionLists = async () => {
+    const userId = localStorage.getItem('lawyer_id');
+    if (!userId) return;
+    const { data, error } = await supabase.from('option_lists').select('list_type, value').eq('user_id', userId);
+    if (!error && data) {
+      setOptionLists((prev) => {
+        const merged: Record<string, string[]> = { ...prev };
+        data.forEach((row: any) => {
+          if (!merged[row.list_type]) merged[row.list_type] = [];
+          if (!merged[row.list_type].includes(row.value)) {
+            merged[row.list_type] = [...merged[row.list_type], row.value];
+          }
+        });
+        return merged;
+      });
+    }
+  };
 
   const fetchOfficeInfo = async () => {
     const userId = localStorage.getItem('lawyer_id');
     if (!userId) return;
     const { data, error } = await supabase
       .from('lawyers')
-      .select('office_name, specialization, logo_url')
+      .select('office_name, logo_url')
       .eq('user_id', userId)
+      .eq('is_owner', true)
       .maybeSingle();
 
     if (!error && data) {
       setUserOfficeInfo((prev) => ({
         ...prev,
-        officeName: data.office_name || data.specialization || prev.officeName,
+        officeName: data.office_name || prev.officeName,
         logoUrl: data.logo_url || null,
       }));
     }
+  };
+
+  const fetchLawyersDirectory = async () => {
+    const userId = localStorage.getItem('lawyer_id');
+    if (!userId) return;
+    const { data, error } = await supabase
+      .from('lawyers')
+      .select('*')
+      .eq('user_id', userId)
+      .order('lawyer_name', { ascending: true });
+
+    if (!error && data) setLawyersDirectory(data);
   };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -244,7 +285,7 @@ export default function DashboardContent() {
   };
 
   const buildInfoTable = (dataObj: any) => {
-    const hiddenKeys = ['id', 'client_id', 'case_id'];
+    const hiddenKeys = ['id', 'client_id', 'case_id', 'office_lawyer_id', 'opponent_lawyer_id'];
     let html = '<table style="width: 100%; border-collapse: collapse; margin-top: 8px;">';
     for (const [key, value] of Object.entries(dataObj)) {
       if (!hiddenKeys.includes(key) && typeof value !== 'object') {
@@ -262,6 +303,12 @@ export default function DashboardContent() {
 
   const openPrintFrame = (title: string, bodyHtml: string) => {
     setPrintPreview({ title, html: bodyHtml });
+  };
+
+  const getLawyerName = (lawyerId: any) => {
+    if (!lawyerId) return null;
+    const lw = lawyersDirectory.find((l) => l.id === lawyerId);
+    return lw ? lw.lawyer_name : null;
   };
 
   const handlePrintClientReport = (client: any) => {
@@ -283,6 +330,15 @@ export default function DashboardContent() {
         contentHtml += '<div style="border: 1px solid #1e3a8a; border-radius: 8px; margin-bottom: 16px; overflow: hidden; page-break-inside: avoid;">';
         contentHtml += `<div style="background: #1e3a8a; color: #fff; font-weight: bold; padding: 8px 14px; font-size: 14px;">قضية رقم ${cs.case_number || '-'}</div>`;
         contentHtml += `<div style="padding: 6px 14px;">${buildInfoTable(cs)}</div>`;
+
+        const officeLawyerName = getLawyerName(cs.office_lawyer_id);
+        const opponentLawyerName = getLawyerName(cs.opponent_lawyer_id);
+        if (officeLawyerName || opponentLawyerName) {
+          contentHtml += '<div style="padding: 0 14px 6px; font-size: 12px; color: #334155;">';
+          if (officeLawyerName) contentHtml += `<div><strong>محامي المكتب:</strong> ${officeLawyerName}</div>`;
+          if (opponentLawyerName) contentHtml += `<div><strong>محامي الخصم:</strong> ${opponentLawyerName}</div>`;
+          contentHtml += '</div>';
+        }
 
         const caseEvents = events.filter(ev => ev.case_id === cs.id);
         contentHtml += '<div style="padding: 0 14px 12px;">';
@@ -335,6 +391,15 @@ export default function DashboardContent() {
 
     contentHtml += '<h4 style="color: #1e3a8a; background: #eff6ff; padding: 8px 12px; border-radius: 6px; margin-bottom: 4px;">بيانات القضية</h4>';
     contentHtml += buildInfoTable(caseObj);
+
+    const officeLawyerName = getLawyerName(caseObj.office_lawyer_id);
+    const opponentLawyerName = getLawyerName(caseObj.opponent_lawyer_id);
+    if (officeLawyerName || opponentLawyerName) {
+      contentHtml += '<div style="margin-top: 8px; font-size: 13px; color: #334155;">';
+      if (officeLawyerName) contentHtml += `<div><strong>محامي المكتب:</strong> ${officeLawyerName}</div>`;
+      if (opponentLawyerName) contentHtml += `<div><strong>محامي الخصم:</strong> ${opponentLawyerName}</div>`;
+      contentHtml += '</div>';
+    }
 
     contentHtml += '<h4 style="color: #1e3a8a; margin-top: 24px; margin-bottom: 10px;">الأحداث والجلسات المرتبطة</h4>';
 
@@ -468,11 +533,68 @@ export default function DashboardContent() {
     openPrintFrame(`طباعة سجل - ${title}`, contentHtml);
   };
 
-  const handleAddDynamicOption = (title: string, setter: React.Dispatch<React.SetStateAction<string[]>>, currentList: string[]) => {
-    const newVal = prompt('أدخل البند الجديد لـ ' + title + ':');
-    if (newVal && newVal.trim() !== '') {
-      if (!currentList.includes(newVal.trim())) {
-        setter([...currentList, newVal.trim()]);
+  const handleAddDynamicOption = async (listType: string, rawValue: string) => {
+    const trimmed = rawValue.trim();
+    if (!trimmed) return;
+    const currentList = optionLists[listType] || [];
+    if (currentList.includes(trimmed)) {
+      setOptionPrompt(null);
+      return;
+    }
+
+    const userId = localStorage.getItem('lawyer_id');
+    if (userId) {
+      const { error } = await supabase.from('option_lists').insert([{ user_id: userId, list_type: listType, value: trimmed }]);
+      if (error) {
+        alert('فشل حفظ الخيار الجديد: ' + error.message);
+        return;
+      }
+    }
+    setOptionLists((prev) => ({ ...prev, [listType]: [...(prev[listType] || []), trimmed] }));
+    setOptionPrompt(null);
+  };
+
+  const handleLawyerSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const lawyerData = {
+      user_id: localStorage.getItem('lawyer_id'),
+      lawyer_name: formData.get('lawyer_name'),
+      phone: formData.get('phone'),
+      syndicate_number: formData.get('syndicate_number'),
+      degree: formData.get('degree'),
+      address: formData.get('address'),
+      email: formData.get('email'),
+      notes: formData.get('notes'),
+    };
+    let error;
+    if (editingLawyer) {
+      const res = await supabase.from('lawyers').update(lawyerData).eq('id', editingLawyer.id);
+      error = res.error;
+    } else {
+      const res = await supabase.from('lawyers').insert([{ ...lawyerData, is_owner: false }]);
+      error = res.error;
+    }
+    if (!error) {
+      setShowLawyerModal(false);
+      setEditingLawyer(null);
+      fetchLawyersDirectory();
+    } else {
+      alert('خطأ أثناء حفظ بيانات المحامي : ' + error.message);
+    }
+  };
+
+  const handleDeleteLawyer = async (lawyer: any) => {
+    if (lawyer.is_owner) {
+      alert('لا يمكن حذف صف صاحب الحساب.');
+      return;
+    }
+    if (confirm('هل أنت متأكد من حذف هذا المحامي من الدليل؟')) {
+      const { error } = await supabase.from('lawyers').delete().eq('id', lawyer.id);
+      if (!error) {
+        fetchLawyersDirectory();
+      } else {
+        alert('خطأ أثناء الحذف : ' + error.message);
       }
     }
   };
@@ -521,6 +643,8 @@ export default function DashboardContent() {
       opponent_name: formData.get('opponent_name'),
       opponent_type: formData.get('opponent_type'),
       litigation_degree: formData.get('litigation_degree'),
+      office_lawyer_id: formData.get('office_lawyer_id') ? Number(formData.get('office_lawyer_id')) : null,
+      opponent_lawyer_id: formData.get('opponent_lawyer_id') ? Number(formData.get('opponent_lawyer_id')) : null,
       notes: formData.get('notes'),
     };
     let error;
@@ -1131,13 +1255,13 @@ export default function DashboardContent() {
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <label className="font-bold text-slate-700">نوع الموكل</label>
-                    <button type="button" onClick={() => handleAddDynamicOption('نوع الموكل', setClientTypes, clientTypes)} className="text-xs bg-blue-50 text-blue-900 hover:bg-blue-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-blue-200 transition">
+                    <button type="button" onClick={() => { setOptionPrompt({ title: 'نوع الموكل', listType: 'client_type' }); setOptionPromptValue(''); }} className="text-xs bg-blue-50 text-blue-900 hover:bg-blue-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-blue-200 transition">
                       <Plus className="w-3 h-3" /> إضافة
                     </button>
                   </div>
                   <select name="client_type" defaultValue={editingClient?.client_type || ''} className="w-full border rounded-xl p-2.5 outline-none bg-slate-50/50 focus:ring-2 focus:ring-blue-900">
                     <option value="">-- اختر نوع الموكل --</option>
-                    {clientTypes.map((item, idx) => <option key={idx} value={item}>{item}</option>)}
+                    {(optionLists.client_type || []).map((item, idx) => <option key={idx} value={item}>{item}</option>)}
                   </select>
                 </div>
                 <div>
@@ -1149,13 +1273,13 @@ export default function DashboardContent() {
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <label className="font-bold text-slate-700">نوع التوكيل</label>
-                    <button type="button" onClick={() => handleAddDynamicOption('نوع التوكيل', setPoaTypes, poaTypes)} className="text-xs bg-blue-50 text-blue-900 hover:bg-blue-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-blue-200 transition">
+                    <button type="button" onClick={() => { setOptionPrompt({ title: 'نوع التوكيل', listType: 'poa_type' }); setOptionPromptValue(''); }} className="text-xs bg-blue-50 text-blue-900 hover:bg-blue-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-blue-200 transition">
                       <Plus className="w-3 h-3" /> إضافة
                     </button>
                   </div>
                   <select name="power_of_attorney_type" defaultValue={editingClient?.power_of_attorney_type || ''} className="w-full border rounded-xl p-2.5 outline-none bg-slate-50/50 focus:ring-2 focus:ring-blue-900">
                     <option value="">-- اختر نوع التوكيل --</option>
-                    {poaTypes.map((item, idx) => <option key={idx} value={item}>{item}</option>)}
+                    {(optionLists.poa_type || []).map((item, idx) => <option key={idx} value={item}>{item}</option>)}
                   </select>
                 </div>
                 <div>
@@ -1167,25 +1291,25 @@ export default function DashboardContent() {
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <label className="font-bold text-slate-700">القطاع</label>
-                    <button type="button" onClick={() => handleAddDynamicOption('القطاع', setSectors, sectors)} className="text-xs bg-blue-50 text-blue-900 hover:bg-blue-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-blue-200 transition">
+                    <button type="button" onClick={() => { setOptionPrompt({ title: 'القطاع', listType: 'sector' }); setOptionPromptValue(''); }} className="text-xs bg-blue-50 text-blue-900 hover:bg-blue-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-blue-200 transition">
                       <Plus className="w-3 h-3" /> إضافة
                     </button>
                   </div>
                   <select name="sector" defaultValue={editingClient?.sector || ''} className="w-full border rounded-xl p-2.5 outline-none bg-slate-50/50 focus:ring-2 focus:ring-blue-900">
                     <option value="">-- اختر القطاع --</option>
-                    {sectors.map((item, idx) => <option key={idx} value={item}>{item}</option>)}
+                    {(optionLists.sector || []).map((item, idx) => <option key={idx} value={item}>{item}</option>)}
                   </select>
                 </div>
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <label className="font-bold text-slate-700">الجهة</label>
-                    <button type="button" onClick={() => handleAddDynamicOption('الجهة', setEntities, entities)} className="text-xs bg-blue-50 text-blue-900 hover:bg-blue-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-blue-200 transition">
+                    <button type="button" onClick={() => { setOptionPrompt({ title: 'الجهة', listType: 'entity' }); setOptionPromptValue(''); }} className="text-xs bg-blue-50 text-blue-900 hover:bg-blue-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-blue-200 transition">
                       <Plus className="w-3 h-3" /> إضافة
                     </button>
                   </div>
                   <select name="entity" defaultValue={editingClient?.entity || ''} className="w-full border rounded-xl p-2.5 outline-none bg-slate-50/50 focus:ring-2 focus:ring-blue-900">
                     <option value="">-- اختر الجهة --</option>
-                    {entities.map((item, idx) => <option key={idx} value={item}>{item}</option>)}
+                    {(optionLists.entity || []).map((item, idx) => <option key={idx} value={item}>{item}</option>)}
                   </select>
                 </div>
               </div>
@@ -1237,25 +1361,25 @@ export default function DashboardContent() {
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <label className="font-bold text-slate-700">نوع القضية</label>
-                    <button type="button" onClick={() => handleAddDynamicOption('نوع القضية', setCaseTypes, caseTypes)} className="text-xs bg-rose-50 text-rose-900 hover:bg-rose-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-blue-200 transition">
+                    <button type="button" onClick={() => { setOptionPrompt({ title: 'نوع القضية', listType: 'case_type' }); setOptionPromptValue(''); }} className="text-xs bg-rose-50 text-rose-900 hover:bg-rose-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-blue-200 transition">
                       <Plus className="w-3 h-3" /> إضافة
                     </button>
                   </div>
                   <select name="case_type" defaultValue={editingCase?.case_type || ''} className="w-full border rounded-xl p-2.5 outline-none bg-slate-50/50 focus:ring-2 focus:ring-rose-800">
                     <option value="">-- اختر نوع القضية --</option>
-                    {caseTypes.map((item, idx) => <option key={idx} value={item}>{item}</option>)}
+                    {(optionLists.case_type || []).map((item, idx) => <option key={idx} value={item}>{item}</option>)}
                   </select>
                 </div>
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <label className="font-bold text-slate-700">درجة التقاضي</label>
-                    <button type="button" onClick={() => handleAddDynamicOption('درجة التقاضي', setLitigationDegrees, litigationDegrees)} className="text-xs bg-rose-50 text-rose-900 hover:bg-rose-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-rose-200 transition">
+                    <button type="button" onClick={() => { setOptionPrompt({ title: 'درجة التقاضي', listType: 'litigation_degree' }); setOptionPromptValue(''); }} className="text-xs bg-rose-50 text-rose-900 hover:bg-rose-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-rose-200 transition">
                       <Plus className="w-3 h-3" /> إضافة
                     </button>
                   </div>
                   <select name="litigation_degree" defaultValue={editingCase?.litigation_degree || ''} className="w-full border rounded-xl p-2.5 outline-none bg-slate-50/50 focus:ring-2 focus:ring-rose-800">
                     <option value="">-- اختر درجة التقاضي --</option>
-                    {litigationDegrees.map((item, idx) => <option key={idx} value={item}>{item}</option>)}
+                    {(optionLists.litigation_degree || []).map((item, idx) => <option key={idx} value={item}>{item}</option>)}
                   </select>
                 </div>
               </div>
@@ -1267,13 +1391,39 @@ export default function DashboardContent() {
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <label className="font-bold text-slate-700">صفة الخصم</label>
-                    <button type="button" onClick={() => handleAddDynamicOption('صفة الخصم', setOpponentTypes, opponentTypes)} className="text-xs bg-rose-50 text-rose-900 hover:bg-rose-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-rose-200 transition">
+                    <button type="button" onClick={() => { setOptionPrompt({ title: 'صفة الخصم', listType: 'opponent_type' }); setOptionPromptValue(''); }} className="text-xs bg-rose-50 text-rose-900 hover:bg-rose-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-rose-200 transition">
                       <Plus className="w-3 h-3" /> إضافة
                     </button>
                   </div>
                   <select name="opponent_type" defaultValue={editingCase?.opponent_type || ''} className="w-full border rounded-xl p-2.5 outline-none bg-slate-50/50 focus:ring-2 focus:ring-rose-800">
                     <option value="">-- اختر صفة الخصم --</option>
-                    {opponentTypes.map((item, idx) => <option key={idx} value={item}>{item}</option>)}
+                    {(optionLists.opponent_type || []).map((item, idx) => <option key={idx} value={item}>{item}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="font-bold text-slate-700">محامي المكتب</label>
+                    <button type="button" onClick={() => { setEditingLawyer(null); setShowLawyerModal(true); }} className="text-xs bg-rose-50 text-rose-900 hover:bg-rose-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-rose-200 transition">
+                      <Plus className="w-3 h-3" /> إضافة محامي
+                    </button>
+                  </div>
+                  <select name="office_lawyer_id" defaultValue={editingCase?.office_lawyer_id || ''} className="w-full border rounded-xl p-2.5 outline-none bg-slate-50/50 focus:ring-2 focus:ring-rose-800">
+                    <option value="">-- اختر محامي المكتب --</option>
+                    {lawyersDirectory.map((lw) => <option key={lw.id} value={lw.id}>{lw.lawyer_name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="font-bold text-slate-700">محامي الخصم</label>
+                    <button type="button" onClick={() => { setEditingLawyer(null); setShowLawyerModal(true); }} className="text-xs bg-rose-50 text-rose-900 hover:bg-rose-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-rose-200 transition">
+                      <Plus className="w-3 h-3" /> إضافة محامي
+                    </button>
+                  </div>
+                  <select name="opponent_lawyer_id" defaultValue={editingCase?.opponent_lawyer_id || ''} className="w-full border rounded-xl p-2.5 outline-none bg-slate-50/50 focus:ring-2 focus:ring-rose-800">
+                    <option value="">-- اختر محامي الخصم --</option>
+                    {lawyersDirectory.map((lw) => <option key={lw.id} value={lw.id}>{lw.lawyer_name}</option>)}
                   </select>
                 </div>
               </div>
@@ -1325,25 +1475,25 @@ export default function DashboardContent() {
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <label className="block font-bold mb-1 text-slate-700">نوع الحدث</label>
-                    <button type="button" onClick={() => handleAddDynamicOption('نوع الحدث', setEventTypes, eventTypes)} className="text-xs bg-emerald-50 text-emerald-900 hover:bg-emerald-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-emerald-200 transition">
+                    <button type="button" onClick={() => { setOptionPrompt({ title: 'نوع الحدث', listType: 'event_type' }); setOptionPromptValue(''); }} className="text-xs bg-emerald-50 text-emerald-900 hover:bg-emerald-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-emerald-200 transition">
                       <Plus className="w-3 h-3" /> إضافة
                     </button>
                   </div>
                   <select name="event_type" defaultValue={editingEvent?.event_type || ''} className="w-full border rounded-xl p-2.5 outline-none bg-slate-50/50 focus:ring-2 focus:ring-emerald-700">
                     <option value="">-- اختر نوع الحدث --</option>
-                    {eventTypes.map((item, idx) => <option key={idx} value={item}>{item}</option>)}
+                    {(optionLists.event_type || []).map((item, idx) => <option key={idx} value={item}>{item}</option>)}
                   </select>
                 </div>
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <label className="block font-bold mb-1 text-slate-700">حالة الحدث</label>
-                    <button type="button" onClick={() => handleAddDynamicOption('حالة الحدث', setEventStatuses, eventStatuses)} className="text-xs bg-emerald-50 text-emerald-900 hover:bg-emerald-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-emerald-200 transition">
+                    <button type="button" onClick={() => { setOptionPrompt({ title: 'حالة الحدث', listType: 'event_status' }); setOptionPromptValue(''); }} className="text-xs bg-emerald-50 text-emerald-900 hover:bg-emerald-100 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 border border-emerald-200 transition">
                       <Plus className="w-3 h-3" /> إضافة
                     </button>
                   </div>
                   <select name="event_status" defaultValue={editingEvent?.event_status || ''} className="w-full border rounded-xl p-2.5 outline-none bg-slate-50/50 focus:ring-2 focus:ring-emerald-700">
                     <option value="">-- اختر حالة الحدث --</option>
-                    {eventStatuses.map((item, idx) => <option key={idx} value={item}>{item}</option>)}
+                    {(optionLists.event_status || []).map((item, idx) => <option key={idx} value={item}>{item}</option>)}
                   </select>
                 </div>
               </div>
@@ -1402,19 +1552,8 @@ export default function DashboardContent() {
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              <div className="space-y-2">
-                <button onClick={() => { setSidebarOpen(false); setEditingClient(null); setShowClientModal(true); }} className="w-full text-right px-4 py-3 bg-blue-900/40 hover:bg-blue-900/70 text-blue-200 rounded-xl font-bold text-sm transition flex items-center gap-3 border border-blue-800/50">
-                  <Users className="w-4 h-4 text-blue-400" /> إضافة موكل جديد
-                </button>
-                <button onClick={() => { setSidebarOpen(false); setEditingCase(null); setShowCaseModal(true); }} className="w-full text-right px-4 py-3 bg-rose-950/40 hover:bg-rose-900/60 text-rose-200 rounded-xl font-bold text-sm transition flex items-center gap-3 border border-rose-900/50">
-                  <Briefcase className="w-4 h-4 text-rose-400" /> إضافة قضية جديدة
-                </button>
-                <button onClick={() => { setSidebarOpen(false); setEditingEvent(null); setShowEventModal(true); }} className="w-full text-right px-4 py-3 bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-200 rounded-xl font-bold text-sm transition flex items-center gap-3 border border-emerald-900/50">
-                  <Calendar className="w-4 h-4 text-emerald-400" /> إضافة حدث أو جلسة
-                </button>
-              </div>
 
-              <div className="mt-6 pt-4 border-t border-slate-800 space-y-2">
+              <div className="pt-2 space-y-2">
                 <button onClick={() => { setSidebarOpen(false); setSettingsOfficeName(userOfficeInfo.officeName); setShowSettingsModal(true); }} className="w-full text-right px-4 py-3 bg-slate-800/60 hover:bg-slate-800 text-slate-200 rounded-xl font-bold text-sm transition flex items-center gap-3 border border-slate-700/50">
                   <Settings className="w-4 h-4 text-slate-400" /> الإعدادات
                 </button>
@@ -1485,7 +1624,7 @@ export default function DashboardContent() {
       {/* نافذة إدارة المشرف */}
       {showAdminModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 max-h-[85vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4 border-b pb-3">
               <h3 className="text-xl font-bold text-blue-950">إدارة المشرف</h3>
               <button onClick={() => setShowAdminModal(false)} className="p-2 hover:bg-gray-100 rounded-full"><X className="w-6 h-6" /></button>
@@ -1503,8 +1642,121 @@ export default function DashboardContent() {
                 <span className="text-slate-500">حالة الحساب</span>
                 <strong className="text-emerald-700">نشط</strong>
               </div>
-              <p className="text-xs text-slate-400 text-center pt-2">إدارة حسابات إضافية للموظفين هتُضاف هنا لاحقاً.</p>
+
+              <div className="pt-4 border-t">
+                <div className="flex justify-between items-center mb-3">
+                  <h4 className="font-bold text-blue-950">دليل المحامين</h4>
+                  <button onClick={() => { setEditingLawyer(null); setShowLawyerModal(true); }} className="bg-blue-900 hover:bg-blue-950 text-white px-3 py-1.5 rounded-lg flex items-center gap-1 text-xs font-bold transition">
+                    <Plus className="w-3.5 h-3.5" /> إضافة محامي جديد
+                  </button>
+                </div>
+                {lawyersDirectory.length === 0 ? (
+                  <p className="text-xs text-slate-400 text-center py-3">لا يوجد محامين مسجلين في الدليل حالياً.</p>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {lawyersDirectory.map((lw) => (
+                      <div key={lw.id} className="flex justify-between items-center bg-slate-50 border border-slate-200 rounded-xl p-2.5">
+                        <div>
+                          <div className="font-bold text-slate-900">
+                            {lw.lawyer_name} {lw.is_owner && <span className="text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-full mr-1">أنت (صاحب الحساب)</span>}
+                          </div>
+                          <div className="text-[11px] text-slate-500">{lw.phone || '-'} {lw.syndicate_number ? `— قيد رقم ${lw.syndicate_number}` : ''}</div>
+                        </div>
+                        <div className="flex gap-1.5">
+                          <button onClick={() => { setEditingLawyer(lw); setShowLawyerModal(true); }} className="p-1.5 text-blue-700 hover:bg-blue-50 rounded-lg transition" title="تعديل">
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          {!lw.is_owner && (
+                            <button onClick={() => handleDeleteLawyer(lw)} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition" title="حذف">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* نافذة إضافة / تعديل محامي */}
+      {showLawyerModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[65] p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4 border-b pb-3">
+              <h3 className="text-xl font-bold text-blue-950">{editingLawyer ? 'تعديل بيانات المحامي' : 'إضافة محامي جديد'}</h3>
+              <button onClick={() => { setShowLawyerModal(false); setEditingLawyer(null); }} className="p-2 hover:bg-gray-100 rounded-full"><X className="w-6 h-6" /></button>
+            </div>
+            <form onSubmit={handleLawyerSubmit} className="space-y-4 text-sm">
+              <div>
+                <label className="block font-bold mb-1 text-slate-700">اسم المحامي</label>
+                <input type="text" name="lawyer_name" defaultValue={editingLawyer?.lawyer_name || ''} required className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-900" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold mb-1 text-slate-700">رقم الهاتف</label>
+                  <input type="text" name="phone" defaultValue={editingLawyer?.phone || ''} className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-900" />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1 text-slate-700">رقم قيد النقابة</label>
+                  <input type="text" name="syndicate_number" defaultValue={editingLawyer?.syndicate_number || ''} className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-900" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold mb-1 text-slate-700">الدرجة</label>
+                  <input type="text" name="degree" defaultValue={editingLawyer?.degree || ''} placeholder="مثال: محامي أستئناف" className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-900" />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1 text-slate-700">البريد الإلكتروني</label>
+                  <input type="email" name="email" defaultValue={editingLawyer?.email || ''} className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-900" />
+                </div>
+              </div>
+              <div>
+                <label className="block font-bold mb-1 text-slate-700">العنوان</label>
+                <input type="text" name="address" defaultValue={editingLawyer?.address || ''} className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-900" />
+              </div>
+              <div>
+                <label className="block font-bold mb-1 text-slate-700">ملاحظات</label>
+                <textarea name="notes" defaultValue={editingLawyer?.notes || ''} rows={2} className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-900"></textarea>
+              </div>
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <button type="button" onClick={() => { setShowLawyerModal(false); setEditingLawyer(null); }} className="px-5 py-2.5 bg-gray-100 rounded-xl font-bold">إلغاء</button>
+                <button type="submit" className="px-5 py-2.5 bg-blue-900 text-white rounded-xl font-bold shadow">{editingLawyer ? 'تحديث البيانات' : 'حفظ المحامي'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* نافذة إضافة بند جديد للقوائم المنسدلة */}
+      {optionPrompt && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[70] p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100">
+            <div className="flex justify-between items-center mb-4 border-b pb-3">
+              <h3 className="text-lg font-bold text-blue-950">إضافة بند جديد لـ {optionPrompt.title}</h3>
+              <button onClick={() => setOptionPrompt(null)} className="p-2 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
+            </div>
+            <form
+              onSubmit={(e) => { e.preventDefault(); handleAddDynamicOption(optionPrompt.listType, optionPromptValue); }}
+              className="space-y-4"
+            >
+              <input
+                type="text"
+                autoFocus
+                value={optionPromptValue}
+                onChange={(e) => setOptionPromptValue(e.target.value)}
+                placeholder={`اكتب قيمة ${optionPrompt.title} الجديدة...`}
+                className="w-full border rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-900"
+              />
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <button type="button" onClick={() => setOptionPrompt(null)} className="px-4 py-2 bg-gray-100 rounded-xl font-bold text-sm">إلغاء</button>
+                <button type="submit" className="px-4 py-2 bg-blue-900 text-white rounded-xl font-bold text-sm shadow">إضافة</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
