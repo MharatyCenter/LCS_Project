@@ -1,4 +1,4 @@
-import { supabase, type EventItem, type EventInput } from './supabaseClient';
+import { supabase, type EventItem, type EventInput } from '../src/Services/supabaseClient';
 
 export type { EventItem, EventInput };
 

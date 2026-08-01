@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ChevronRight, ChevronLeft, X, Calendar as CalendarIcon, Clock, FileText, User } from 'lucide-react';
-import { type EventItem } from '../Services/eventsService';
+import { type EventItem } from './eventsService';
 
 interface MonthlyCalendarProps {
   isOpen: boolean;

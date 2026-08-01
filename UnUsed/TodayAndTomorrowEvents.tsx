@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CalendarDays, Calendar, Clock, MapPin, ArrowLeft, ChevronDown, ChevronUp } from 'lucide-react';
-import { getEvents, type EventItem } from '../Services/eventsService';
+import { getEvents, type EventItem } from './eventsService';
 import MonthlyCalendarModal from './MonthlyCalendarModal'; // استيراد الأجندة الشهرية
 
 function getDateStr(offsetDays = 0) {

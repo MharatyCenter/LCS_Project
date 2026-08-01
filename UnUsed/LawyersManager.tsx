@@ -16,7 +16,7 @@ import {
   updateLawyer,
   deleteLawyer,
   type Lawyer,
-} from '../Services/lawyersService';
+} from './lawyersService';
 import {
   Modal,
   Field,
@@ -27,8 +27,8 @@ import {
   ErrorBanner,
   Textarea,
   ConfirmDialog,
-} from './ui';
-import { triggerRefresh } from '../utils/refreshUtils';
+} from '../src/components/ui';
+import { triggerRefresh } from '../src/utils/refreshUtils';
 
 type Props = {
   onSelect?: (id: number | null) => void;

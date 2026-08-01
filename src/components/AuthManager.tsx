@@ -11,6 +11,7 @@ export default function AuthManager({ onAuthSuccess }: Props) {
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [confirmMsg, setConfirmMsg] = useState<string | null>(null);
   const [greeting, setGreeting] = useState('');
   const [form, setForm] = useState({ email: '', password: '', username: '', officeName: '' });
 
@@ -51,6 +52,7 @@ export default function AuthManager({ onAuthSuccess }: Props) {
     e.preventDefault();
     setLoading(true);
     setErrorMsg(null);
+    setConfirmMsg(null);
 
     try {
       if (isLogin) {
@@ -100,6 +102,15 @@ export default function AuthManager({ onAuthSuccess }: Props) {
             ]);
 
           if (profileError) console.error("Profile insertion error:", profileError);
+        }
+
+        // لو تأكيد البريد الإلكتروني مفعّل، Supabase مش هيرجّع جلسة دخول فعلية إلا بعد التأكيد
+        if (!authData.session) {
+          setConfirmMsg('تم إنشاء الحساب بنجاح ✅ يرجى فتح بريدك الإلكتروني (' + form.email + ') والضغط على رابط التأكيد المرسل قبل تسجيل الدخول.');
+          setIsLogin(true);
+          setForm((prev) => ({ ...prev, password: '' }));
+          setLoading(false);
+          return;
         }
 
         localStorage.setItem('saved_lawyer_email', form.email);
@@ -155,6 +166,12 @@ export default function AuthManager({ onAuthSuccess }: Props) {
         {errorMsg && (
           <div className="mt-4 rounded-xl bg-red-50 p-3 text-xs font-medium text-red-600 border border-red-100 text-right animate-shake">
             {errorMsg}
+          </div>
+        )}
+
+        {confirmMsg && (
+          <div className="mt-4 rounded-xl bg-emerald-50 p-3 text-xs font-medium text-emerald-700 border border-emerald-100 text-right">
+            {confirmMsg}
           </div>
         )}
 

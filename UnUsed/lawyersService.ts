@@ -1,4 +1,4 @@
-import { supabase, type Lawyer, type LawyerInput } from './supabaseClient';
+import { supabase, type Lawyer, type LawyerInput } from '../src/Services/supabaseClient';
 
 export type { Lawyer, LawyerInput };
 

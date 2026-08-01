@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../Services/supabaseClient';
+import { supabase } from '../src/Services/supabaseClient';
 import { Plus, Search, Edit2, Trash2, Users, ChevronDown, ChevronUp } from 'lucide-react';
 
 type CalendarEvent = {

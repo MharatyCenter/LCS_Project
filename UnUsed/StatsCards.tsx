@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Users, Briefcase, CalendarDays, Gavel, TrendingUp } from 'lucide-react';
-import { onRefresh } from '../utils/refreshUtils';
-import * as clientsService from '../Services/clientsService';
-import { getCases } from '../Services/casesService';
-import { getEvents } from '../Services/eventsService';
-import { getLawyers } from '../Services/lawyersService';
+import { onRefresh } from '../src/utils/refreshUtils';
+import * as clientsService from './clientsService';
+import { getCases } from './casesService';
+import { getEvents } from './eventsService';
+import { getLawyers } from './lawyersService';
 
 type Stat = {
   label: string;

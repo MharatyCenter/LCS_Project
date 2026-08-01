@@ -23,7 +23,8 @@ import {
   ImagePlus,
   Settings,
   MessageCircle,
-  UserCog
+  UserCog,
+  Sparkles
 } from 'lucide-react';
 
 export default function DashboardContent() {
@@ -45,6 +46,10 @@ export default function DashboardContent() {
   const [optionLists, setOptionLists] = useState<Record<string, string[]>>(defaultOptionLists);
   const [lawyersDirectory, setLawyersDirectory] = useState<any[]>([]);
   const [showLawyerModal, setShowLawyerModal] = useState(false);
+  const TRIAL_LIMITS = { clients: 3, cases: 5, events: 10 };
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [showLawyersListModal, setShowLawyersListModal] = useState(false);
+  const [upgradeReason, setUpgradeReason] = useState('');
   const [editingLawyer, setEditingLawyer] = useState<any | null>(null);
   const [optionPrompt, setOptionPrompt] = useState<{ title: string; listType: string } | null>(null);
   const [optionPromptValue, setOptionPromptValue] = useState('');
@@ -251,6 +256,17 @@ export default function DashboardContent() {
     }
   };
 
+  const checkTrialLimitAndOpen = (type: 'clients' | 'cases' | 'events', openFn: () => void) => {
+    const counts = { clients: clients.length, cases: cases.length, events: events.length };
+    const labels = { clients: 'الموكلين', cases: 'القضايا', events: 'الأحداث' };
+    if (counts[type] >= TRIAL_LIMITS[type]) {
+      setUpgradeReason(labels[type]);
+      setShowUpgradeModal(true);
+      return;
+    }
+    openFn();
+  };
+
   const handleDelete = async (table: string, id: number) => {
     if (confirm('هل أنت متأكد من حذف هذا السجل؟')) {
       const { error } = await supabase.from(table).delete().eq('id', id);
@@ -309,6 +325,50 @@ export default function DashboardContent() {
     if (!lawyerId) return null;
     const lw = lawyersDirectory.find((l) => l.id === lawyerId);
     return lw ? lw.lawyer_name : null;
+  };
+
+  const getLawyerCaseInfo = (lawyerId: number) => {
+    const officeCases = cases.filter((cs) => cs.office_lawyer_id === lawyerId).map((cs) => cs.case_number);
+    const opponentCases = cases.filter((cs) => cs.opponent_lawyer_id === lawyerId).map((cs) => cs.case_number);
+    return { officeCases, opponentCases };
+  };
+
+  const handlePrintLawyersList = () => {
+    let contentHtml = '<div style="font-family: \'Cairo\', sans-serif; direction: rtl; padding: 20px; color: #111;">';
+    contentHtml += `<h2 style="text-align: center; color: #1e3a8a; border-bottom: 2px solid #1e3a8a; padding-bottom: 10px;">${userOfficeInfo.officeName}</h2>`;
+    contentHtml += `<h3 style="text-align: center; color: #334155; margin-bottom: 20px;">دليل المحامين</h3>`;
+
+    if (lawyersDirectory.length === 0) {
+      contentHtml += '<p style="text-align: center; font-size: 13px; color: #64748b;">لا يوجد محامين مسجلين حالياً.</p>';
+    } else {
+      contentHtml += '<table style="width: 100%; border-collapse: collapse;">';
+      contentHtml += `
+        <tr style="background: #1e3a8a; color: #fff;">
+          <th style="text-align: right; padding: 8px 10px; font-size: 12px;">اسم المحامي</th>
+          <th style="text-align: right; padding: 8px 10px; font-size: 12px;">الهاتف</th>
+          <th style="text-align: right; padding: 8px 10px; font-size: 12px;">التبعية</th>
+          <th style="text-align: right; padding: 8px 10px; font-size: 12px;">أرقام القضايا</th>
+        </tr>`;
+      lawyersDirectory.forEach((lw) => {
+        const { officeCases, opponentCases } = getLawyerCaseInfo(lw.id);
+        const roleLines: string[] = [];
+        if (officeCases.length > 0) roleLines.push(`محامي مكتب: ${officeCases.join('، ')}`);
+        if (opponentCases.length > 0) roleLines.push(`محامي خصم: ${opponentCases.join('، ')}`);
+        contentHtml += `
+          <tr style="border-bottom: 1px solid #e2e8f0;">
+            <td style="padding: 7px 10px; font-size: 12px;">${lw.lawyer_name}${lw.is_owner ? ' (صاحب الحساب)' : ''}</td>
+            <td style="padding: 7px 10px; font-size: 12px;">${lw.phone || '-'}</td>
+            <td style="padding: 7px 10px; font-size: 12px;">${roleLines.length > 0 ? roleLines.join('<br/>') : 'غير مرتبط بقضايا حالياً'}</td>
+            <td style="padding: 7px 10px; font-size: 12px;">${[...officeCases, ...opponentCases].join('، ') || '-'}</td>
+          </tr>`;
+      });
+      contentHtml += '</table>';
+    }
+
+    contentHtml += `<div style="margin-top: 30px; text-align: center; font-size: 12px; color: #64748b;">تاريخ الطباعة: ${new Date().toLocaleDateString('ar-EG')}</div>`;
+    contentHtml += '</div>';
+
+    openPrintFrame('دليل المحامين', contentHtml);
   };
 
   const handlePrintClientReport = (client: any) => {
@@ -601,6 +661,12 @@ export default function DashboardContent() {
 
   const handleClientSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!editingClient && clients.length >= TRIAL_LIMITS.clients) {
+      setShowClientModal(false);
+      setUpgradeReason('الموكلين');
+      setShowUpgradeModal(true);
+      return;
+    }
     const formData = new FormData(e.currentTarget);
     const clientData = {
       user_id: localStorage.getItem('lawyer_id'),
@@ -633,6 +699,12 @@ export default function DashboardContent() {
 
   const handleCaseSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!editingCase && cases.length >= TRIAL_LIMITS.cases) {
+      setShowCaseModal(false);
+      setUpgradeReason('القضايا');
+      setShowUpgradeModal(true);
+      return;
+    }
     const formData = new FormData(e.currentTarget);
     const caseData = {
       user_id: localStorage.getItem('lawyer_id'),
@@ -666,6 +738,12 @@ export default function DashboardContent() {
 
   const handleEventSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!editingEvent && events.length >= TRIAL_LIMITS.events) {
+      setShowEventModal(false);
+      setUpgradeReason('الأحداث');
+      setShowUpgradeModal(true);
+      return;
+    }
     const formData = new FormData(e.currentTarget);
     const eventData = {
       user_id: localStorage.getItem('lawyer_id'),
@@ -755,7 +833,7 @@ export default function DashboardContent() {
                 {userOfficeInfo.logoUrl ? (
                   <img src={userOfficeInfo.logoUrl} alt="لوجو المكتب" className="w-full h-full object-cover" />
                 ) : (
-                  <Shield className="w-6 h-6" />
+                  <img src="/default-logo.svg" alt="لوجو افتراضي" className="w-full h-full object-cover" />
                 )}
               </div>
               <button
@@ -896,9 +974,10 @@ export default function DashboardContent() {
                 <input type="checkbox" checked={showAllClientsOverride} onChange={(e) => setShowAllClientsOverride(e.target.checked)} className="w-4 h-4 text-blue-900 rounded focus:ring-blue-900" />
                 <span>عرض كل الموكلين (تجاوز حد 3)</span>
               </label>
-              <button onClick={() => { setEditingClient(null); setShowClientModal(true); }} className="bg-blue-900 hover:bg-blue-950 text-white px-4 py-2 rounded-xl flex items-center gap-1.5 text-sm font-bold shadow-sm transition">
+              <button onClick={() => checkTrialLimitAndOpen('clients', () => { setEditingClient(null); setShowClientModal(true); })} className="bg-blue-900 hover:bg-blue-950 text-white px-4 py-2 rounded-xl flex items-center gap-1.5 text-sm font-bold shadow-sm transition">
                 <Plus className="w-4 h-4" /> إضافة موكل جديد
               </button>
+              <span className="text-[11px] text-slate-400 font-bold">{clients.length}/{TRIAL_LIMITS.clients}</span>
             </div>
           </div>
           <div className="relative w-full">
@@ -972,9 +1051,10 @@ export default function DashboardContent() {
                 <input type="checkbox" checked={showAllCasesOverride} onChange={(e) => setShowAllCasesOverride(e.target.checked)} className="w-4 h-4 text-rose-800 rounded focus:ring-rose-800" />
                 <span>عرض كل القضايا (تجاوز حد 5)</span>
               </label>
-              <button onClick={() => { setEditingCase(null); setShowCaseModal(true); }} className="bg-rose-800 hover:bg-rose-900 text-white px-4 py-2 rounded-xl flex items-center gap-1.5 text-sm font-bold shadow-sm transition">
+              <button onClick={() => checkTrialLimitAndOpen('cases', () => { setEditingCase(null); setShowCaseModal(true); })} className="bg-rose-800 hover:bg-rose-900 text-white px-4 py-2 rounded-xl flex items-center gap-1.5 text-sm font-bold shadow-sm transition">
                 <Plus className="w-4 h-4" /> إضافة قضية جديدة
               </button>
+              <span className="text-[11px] text-slate-400 font-bold">{cases.length}/{TRIAL_LIMITS.cases}</span>
             </div>
           </div>
           <div className="relative w-full">
@@ -1046,9 +1126,10 @@ export default function DashboardContent() {
                 <input type="checkbox" checked={showAllEventsOverride} onChange={(e) => setShowAllEventsOverride(e.target.checked)} className="w-4 h-4 text-emerald-700 rounded focus:ring-emerald-700" />
                 <span>عرض كل الأحداث (تجاوز حد 10)</span>
               </label>
-              <button onClick={() => { setEditingEvent(null); setShowEventModal(true); }} className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 rounded-xl flex items-center gap-1.5 text-sm font-bold shadow-sm transition">
+              <button onClick={() => checkTrialLimitAndOpen('events', () => { setEditingEvent(null); setShowEventModal(true); })} className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 rounded-xl flex items-center gap-1.5 text-sm font-bold shadow-sm transition">
                 <Plus className="w-4 h-4" /> إضافة حدث جديد
               </button>
+              <span className="text-[11px] text-slate-400 font-bold">{events.length}/{TRIAL_LIMITS.events}</span>
             </div>
           </div>
           <div className="relative w-full">
@@ -1338,7 +1419,7 @@ export default function DashboardContent() {
               <div>
                 <div className="flex justify-between items-center mb-1">
                   <label className="font-bold text-rose-900">الموكل التابع له القضية</label>
-                  <button type="button" onClick={() => { setEditingClient(null); setShowClientModal(true); }} className="text-xs bg-rose-50 text-rose-800 hover:bg-rose-100 font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 border border-rose-200 transition">
+                  <button type="button" onClick={() => checkTrialLimitAndOpen('clients', () => { setEditingClient(null); setShowClientModal(true); })} className="text-xs bg-rose-50 text-rose-800 hover:bg-rose-100 font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 border border-rose-200 transition">
                     <Plus className="w-3.5 h-3.5" /> إضافة موكل جديد
                   </button>
                 </div>
@@ -1452,7 +1533,7 @@ export default function DashboardContent() {
               <div>
                 <div className="flex justify-between items-center mb-1">
                   <label className="font-bold text-emerald-900">القضية المرتبطة</label>
-                  <button type="button" onClick={() => { setEditingCase(null); setShowCaseModal(true); }} className="text-xs bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 border border-emerald-200 transition">
+                  <button type="button" onClick={() => checkTrialLimitAndOpen('cases', () => { setEditingCase(null); setShowCaseModal(true); })} className="text-xs bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 border border-emerald-200 transition">
                     <Plus className="w-3.5 h-3.5" /> إضافة قضية جديدة
                   </button>
                 </div>
@@ -1559,6 +1640,9 @@ export default function DashboardContent() {
                 </button>
                 <button onClick={() => { setSidebarOpen(false); setShowContactModal(true); }} className="w-full text-right px-4 py-3 bg-slate-800/60 hover:bg-slate-800 text-slate-200 rounded-xl font-bold text-sm transition flex items-center gap-3 border border-slate-700/50">
                   <MessageCircle className="w-4 h-4 text-slate-400" /> تواصل معنا
+                </button>
+                <button onClick={() => { setSidebarOpen(false); setShowLawyersListModal(true); }} className="w-full text-right px-4 py-3 bg-slate-800/60 hover:bg-slate-800 text-slate-200 rounded-xl font-bold text-sm transition flex items-center gap-3 border border-slate-700/50">
+                  <Users className="w-4 h-4 text-slate-400" /> المحامين
                 </button>
                 <button onClick={() => { setSidebarOpen(false); setShowAdminModal(true); }} className="w-full text-right px-4 py-3 bg-slate-800/60 hover:bg-slate-800 text-slate-200 rounded-xl font-bold text-sm transition flex items-center gap-3 border border-slate-700/50">
                   <UserCog className="w-4 h-4 text-slate-400" /> إدارة المشرف
@@ -1677,6 +1761,105 @@ export default function DashboardContent() {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* نافذة عرض دليل المحامين */}
+      {showLawyersListModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl max-w-3xl w-full p-6 shadow-2xl border border-slate-100 max-h-[85vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4 border-b pb-3">
+              <h3 className="text-xl font-bold text-blue-950">المحامين</h3>
+              <div className="flex items-center gap-2">
+                <button onClick={handlePrintLawyersList} className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-sm">
+                  <Printer className="w-4 h-4" /> طباعة
+                </button>
+                <button onClick={() => setShowLawyersListModal(false)} className="p-2 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
+              </div>
+            </div>
+
+            {lawyersDirectory.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-8">لا يوجد محامين مسجلين في الدليل حالياً.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-right border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-blue-950 text-white text-xs">
+                      <th className="p-3 rounded-r-xl">اسم المحامي</th>
+                      <th className="p-3">الهاتف</th>
+                      <th className="p-3">التبعية والقضايا</th>
+                      <th className="p-3 text-center rounded-l-xl">إجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {lawyersDirectory.map((lw) => {
+                      const { officeCases, opponentCases } = getLawyerCaseInfo(lw.id);
+                      return (
+                        <tr key={lw.id} className="hover:bg-slate-50 transition">
+                          <td className="p-3 font-bold text-slate-900">
+                            {lw.lawyer_name}
+                            {lw.is_owner && <span className="text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-full mr-1">صاحب الحساب</span>}
+                          </td>
+                          <td className="p-3 text-slate-600">{lw.phone || '-'}</td>
+                          <td className="p-3 text-xs">
+                            {officeCases.length === 0 && opponentCases.length === 0 ? (
+                              <span className="text-slate-400">غير مرتبط بقضايا حالياً</span>
+                            ) : (
+                              <div className="space-y-1">
+                                {officeCases.length > 0 && (
+                                  <div><span className="px-2 py-0.5 bg-blue-50 text-blue-800 rounded-full font-bold">محامي مكتب</span> — {officeCases.join('، ')}</div>
+                                )}
+                                {opponentCases.length > 0 && (
+                                  <div><span className="px-2 py-0.5 bg-rose-50 text-rose-800 rounded-full font-bold">محامي خصم</span> — {opponentCases.join('، ')}</div>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                          <td className="p-3 text-center">
+                            <button onClick={() => { setEditingLawyer(lw); setShowLawyerModal(true); }} className="p-1.5 text-blue-700 hover:bg-blue-50 rounded-lg transition" title="تعديل">
+                              <Edit className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-4 mt-2 border-t">
+              <button onClick={() => { setEditingLawyer(null); setShowLawyerModal(true); }} className="bg-blue-900 hover:bg-blue-950 text-white px-4 py-2 rounded-xl flex items-center gap-1.5 text-sm font-bold shadow-sm transition">
+                <Plus className="w-4 h-4" /> إضافة محامي جديد
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* نافذة تحفيزية عند الوصول لحد النسخة التجريبية */}
+      {showUpgradeModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[80] p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 text-center">
+            <div className="w-14 h-14 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Sparkles className="w-7 h-7" />
+            </div>
+            <h3 className="text-lg font-bold text-blue-950 mb-2">وصلت لحد النسخة التجريبية 🎉</h3>
+            <p className="text-sm text-slate-600 leading-relaxed mb-1">
+              ده معناه إنك بتستخدم النظام بجد! وصلت للحد الأقصى المسموح به من <strong>{upgradeReason}</strong> في النسخة التجريبية.
+            </p>
+            <p className="text-sm text-slate-600 leading-relaxed mb-5">
+              اشترك دلوقتي عشان تفتح استخدام غير محدود لكل بيانات مكتبك، بس <strong className="text-emerald-700">150 جنيه شهرياً</strong> (تُدفع كل 6 شهور).
+            </p>
+            <div className="flex flex-col gap-2">
+              <button onClick={() => { setShowUpgradeModal(false); setShowContactModal(true); }} className="w-full bg-emerald-700 hover:bg-emerald-800 text-white py-2.5 rounded-xl font-bold text-sm transition">
+                تواصل معنا للاشتراك
+              </button>
+              <button onClick={() => setShowUpgradeModal(false)} className="w-full bg-gray-100 hover:bg-gray-200 text-slate-700 py-2.5 rounded-xl font-bold text-sm transition">
+                لاحقاً
+              </button>
             </div>
           </div>
         </div>

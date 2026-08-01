@@ -16,9 +16,9 @@ import {
   updateEvent,
   deleteEvent,
   type EventItem,
-} from '../Services/eventsService';
-import { getCases, type Case } from '../Services/casesService';
-import { getLawyers, type Lawyer } from '../Services/lawyersService';
+} from './eventsService';
+import { getCases, type Case } from './casesService';
+import { getLawyers, type Lawyer } from './lawyersService';
 import {
   Modal,
   Field,
@@ -28,8 +28,8 @@ import {
   EmptyState,
   ErrorBanner,
   ConfirmDialog,
-} from './ui';
-import { triggerRefresh } from '../utils/refreshUtils';
+} from '../src/components/ui';
+import { triggerRefresh } from '../src/utils/refreshUtils';
 
 type Props = {
   selectedCaseId?: number | null;

@@ -1,4 +1,4 @@
-import { supabase } from './supabaseClient';
+import { supabase } from '../src/Services/supabaseClient';
 
 export type Case = {
   id: any;

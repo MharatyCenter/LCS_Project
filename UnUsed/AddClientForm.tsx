@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { createClient } from '../services/clientsService';
+import { createClient } from './clientsService';
 import { UserPlus, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface AddClientFormProps {

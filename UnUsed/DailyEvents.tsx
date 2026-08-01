@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { CalendarDays, Clock, MapPin, ArrowLeft } from 'lucide-react';
-import { onRefresh } from '../utils/refreshUtils';
-import { getEventsByDate, type EventItem } from '../Services/eventsService';
-import { getCases } from '../Services/casesService';
-import { Spinner, EmptyState } from './ui';
+import { onRefresh } from '../src/utils/refreshUtils';
+import { getEventsByDate, type EventItem } from './eventsService';
+import { getCases } from './casesService';
+import { Spinner, EmptyState } from '../src/components/ui';
 import type { ViewKey } from './navConfig';
 
 type Props = {

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Plus, Search, Briefcase, Clock, CheckCircle2, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
-import { onRefresh, triggerRefresh } from '../utils/refreshUtils';
-import * as clientsService from '../Services/clientsService';
-import * as casesService from '../Services/casesService';
+import { onRefresh, triggerRefresh } from '../src/utils/refreshUtils';
+import * as clientsService from './clientsService';
+import * as casesService from './casesService';
 import { type ViewKey } from './navConfig';
 
 type Case = {

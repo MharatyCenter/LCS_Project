@@ -20,5 +20,5 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src", "UnUsed/casesService.ts", "UnUsed/clientsService.ts", "UnUsed/eventsService.ts", "UnUsed/lawyersService.ts", "src/Services/supabaseClient.ts", "UnUsed/ClientsManager.tsx", "UnUsed/LawyersManager.tsx", "UnUsed/MonthlyCalendarModal.tsx", "UnUsed/CasesManager.tsx", "UnUsed/EventsManager.tsx", "UnUsed/AddClientForm.tsx", "UnUsed/DailyEvents.tsx", "UnUsed/Header.tsx", "UnUsed/navConfig.ts", "UnUsed/Sidebar.tsx", "UnUsed/StatsCards.tsx", "UnUsed/TodayAndTomorrowEvents.tsx"]
 }
