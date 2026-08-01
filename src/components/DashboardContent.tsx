@@ -51,7 +51,7 @@ export default function DashboardContent() {
   const [showLawyersListModal, setShowLawyersListModal] = useState(false);
   const [upgradeReason, setUpgradeReason] = useState('');
   const [editingLawyer, setEditingLawyer] = useState<any | null>(null);
-  const [optionPrompt, setOptionPrompt] = useState<{ title: string; listType: string } | null>(null);
+  const [optionPrompt, setOptionPrompt] = useState<{ title: string; listType: string; editingRowId?: number } | null>(null);
   const [optionPromptValue, setOptionPromptValue] = useState('');
 
   const [clientSearch, setClientSearch] = useState('');
@@ -88,14 +88,54 @@ export default function DashboardContent() {
     officeName: localStorage.getItem('office_name') || 'المكتب القانوني',
     subTitle: 'النظام القانوني الموحد',
     logoUrl: null as string | null,
+    officeAddress: '',
+    officePhone: '',
+    reportFooter: '',
   });
   const [logoUploading, setLogoUploading] = useState(false);
   const logoInputRef = React.useRef<HTMLInputElement>(null);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<'office' | 'reports' | 'security' | 'lists' | 'display'>('office');
   const [showContactModal, setShowContactModal] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [settingsOfficeName, setSettingsOfficeName] = useState('');
+  const [settingsOfficeAddress, setSettingsOfficeAddress] = useState('');
+  const [settingsOfficePhone, setSettingsOfficePhone] = useState('');
+  const [settingsReportFooter, setSettingsReportFooter] = useState('');
   const [settingsSaving, setSettingsSaving] = useState(false);
+
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordMsg, setPasswordMsg] = useState<string | null>(null);
+
+  const [newEmail, setNewEmail] = useState('');
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [emailMsg, setEmailMsg] = useState<string | null>(null);
+
+  const listTypeLabels: Record<string, string> = {
+    client_type: 'نوع الموكل',
+    poa_type: 'نوع التوكيل',
+    sector: 'القطاع',
+    entity: 'الجهة',
+    case_type: 'نوع القضية',
+    litigation_degree: 'درجة التقاضي',
+    opponent_type: 'صفة الخصم',
+    event_type: 'نوع الحدث',
+    event_status: 'حالة الحدث',
+  };
+  const [optionListRows, setOptionListRows] = useState<{ id: number; list_type: string; value: string }[]>([]);
+
+  const DEFAULT_DISPLAY_LIMITS = { clients: 3, cases: 5, events: 10 };
+  const [displayLimits, setDisplayLimits] = useState(() => {
+    try {
+      const saved = localStorage.getItem('display_limits');
+      return saved ? JSON.parse(saved) : DEFAULT_DISPLAY_LIMITS;
+    } catch {
+      return DEFAULT_DISPLAY_LIMITS;
+    }
+  });
+  const [displayLimitsDraft, setDisplayLimitsDraft] = useState(displayLimits);
 
   useEffect(() => {
     const link = document.createElement('link');
@@ -125,8 +165,9 @@ export default function DashboardContent() {
   const fetchOptionLists = async () => {
     const userId = localStorage.getItem('lawyer_id');
     if (!userId) return;
-    const { data, error } = await supabase.from('option_lists').select('list_type, value').eq('user_id', userId);
+    const { data, error } = await supabase.from('option_lists').select('id, list_type, value').eq('user_id', userId);
     if (!error && data) {
+      setOptionListRows(data);
       setOptionLists((prev) => {
         const merged: Record<string, string[]> = { ...prev };
         data.forEach((row: any) => {
@@ -140,12 +181,26 @@ export default function DashboardContent() {
     }
   };
 
+  const handleDeleteOptionRow = async (row: { id: number; list_type: string; value: string }) => {
+    if (!confirm(`هل تريد حذف "${row.value}" من قائمة ${listTypeLabels[row.list_type] || row.list_type}؟`)) return;
+    const { error } = await supabase.from('option_lists').delete().eq('id', row.id);
+    if (error) {
+      alert('فشل الحذف: ' + error.message);
+      return;
+    }
+    setOptionListRows((prev) => prev.filter((r) => r.id !== row.id));
+    setOptionLists((prev) => ({
+      ...prev,
+      [row.list_type]: (prev[row.list_type] || []).filter((v) => v !== row.value),
+    }));
+  };
+
   const fetchOfficeInfo = async () => {
     const userId = localStorage.getItem('lawyer_id');
     if (!userId) return;
     const { data, error } = await supabase
       .from('lawyers')
-      .select('office_name, logo_url')
+      .select('office_name, logo_url, office_address, office_phone, report_footer')
       .eq('user_id', userId)
       .eq('is_owner', true)
       .maybeSingle();
@@ -155,6 +210,9 @@ export default function DashboardContent() {
         ...prev,
         officeName: data.office_name || prev.officeName,
         logoUrl: data.logo_url || null,
+        officeAddress: data.office_address || '',
+        officePhone: data.office_phone || '',
+        reportFooter: data.report_footer || '',
       }));
     }
   };
@@ -207,6 +265,13 @@ export default function DashboardContent() {
     }
   };
 
+  const handleResetLogo = async () => {
+    const userId = localStorage.getItem('lawyer_id');
+    if (!userId) return;
+    const { error } = await supabase.from('lawyers').update({ logo_url: null }).eq('user_id', userId);
+    if (!error) setUserOfficeInfo((prev) => ({ ...prev, logoUrl: null }));
+  };
+
   const handleSaveOfficeName = async (e: React.FormEvent) => {
     e.preventDefault();
     const userId = localStorage.getItem('lawyer_id');
@@ -216,19 +281,76 @@ export default function DashboardContent() {
     try {
       const { error } = await supabase
         .from('lawyers')
-        .update({ office_name: settingsOfficeName.trim() })
+        .update({
+          office_name: settingsOfficeName.trim(),
+          office_address: settingsOfficeAddress.trim() || null,
+          office_phone: settingsOfficePhone.trim() || null,
+          report_footer: settingsReportFooter.trim() || null,
+        })
         .eq('user_id', userId);
 
       if (error) throw error;
 
-      setUserOfficeInfo((prev) => ({ ...prev, officeName: settingsOfficeName.trim() }));
+      setUserOfficeInfo((prev) => ({
+        ...prev,
+        officeName: settingsOfficeName.trim(),
+        officeAddress: settingsOfficeAddress.trim(),
+        officePhone: settingsOfficePhone.trim(),
+        reportFooter: settingsReportFooter.trim(),
+      }));
       localStorage.setItem('office_name', settingsOfficeName.trim());
-      setShowSettingsModal(false);
     } catch (err: any) {
-      alert('فشل حفظ اسم المكتب: ' + (err.message || 'خطأ غير متوقع'));
+      alert('فشل حفظ بيانات المكتب: ' + (err.message || 'خطأ غير متوقع'));
     } finally {
       setSettingsSaving(false);
     }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordMsg(null);
+    if (newPassword.length < 6) {
+      setPasswordMsg('❌ كلمة المرور لازم تكون 6 حروف على الأقل.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordMsg('❌ كلمتا المرور غير متطابقتين.');
+      return;
+    }
+    setPasswordSaving(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      setPasswordMsg('✅ تم تغيير كلمة المرور بنجاح.');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err: any) {
+      setPasswordMsg('❌ فشل التغيير: ' + (err.message || 'خطأ غير متوقع'));
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
+  const handleChangeEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEmailMsg(null);
+    if (!newEmail.trim()) return;
+    setEmailSaving(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ email: newEmail.trim() });
+      if (error) throw error;
+      setEmailMsg('✅ تم إرسال رابط تأكيد للبريدين القديم والجديد، لازم تأكدهم الأول عشان يتفعل التغيير.');
+      setNewEmail('');
+    } catch (err: any) {
+      setEmailMsg('❌ فشل التغيير: ' + (err.message || 'خطأ غير متوقع'));
+    } finally {
+      setEmailSaving(false);
+    }
+  };
+
+  const handleSaveDisplayLimits = () => {
+    setDisplayLimits(displayLimitsDraft);
+    localStorage.setItem('display_limits', JSON.stringify(displayLimitsDraft));
   };
 
   const fetchAllData = async () => {
@@ -336,6 +458,9 @@ export default function DashboardContent() {
   const handlePrintLawyersList = () => {
     let contentHtml = '<div style="font-family: \'Cairo\', sans-serif; direction: rtl; padding: 20px; color: #111;">';
     contentHtml += `<h2 style="text-align: center; color: #1e3a8a; border-bottom: 2px solid #1e3a8a; padding-bottom: 10px;">${userOfficeInfo.officeName}</h2>`;
+    if (userOfficeInfo.officeAddress || userOfficeInfo.officePhone) {
+      contentHtml += `<p style="text-align: center; color: #64748b; font-size: 11px; margin: -8px 0 8px;">${userOfficeInfo.officeAddress || ''}${userOfficeInfo.officeAddress && userOfficeInfo.officePhone ? ' — ' : ''}${userOfficeInfo.officePhone || ''}</p>`;
+    }
     contentHtml += `<h3 style="text-align: center; color: #334155; margin-bottom: 20px;">دليل المحامين</h3>`;
 
     if (lawyersDirectory.length === 0) {
@@ -366,6 +491,9 @@ export default function DashboardContent() {
     }
 
     contentHtml += `<div style="margin-top: 30px; text-align: center; font-size: 12px; color: #64748b;">تاريخ الطباعة: ${new Date().toLocaleDateString('ar-EG')}</div>`;
+    if (userOfficeInfo.reportFooter) {
+      contentHtml += `<div style="margin-top: 6px; text-align: center; font-size: 11px; color: #94a3b8;">${userOfficeInfo.reportFooter}</div>`;
+    }
     contentHtml += '</div>';
 
     openPrintFrame('دليل المحامين', contentHtml);
@@ -376,6 +504,9 @@ export default function DashboardContent() {
 
     let contentHtml = '<div style="font-family: \'Cairo\', sans-serif; direction: rtl; padding: 20px; color: #111;">';
     contentHtml += `<h2 style="text-align: center; color: #1e3a8a; border-bottom: 2px solid #1e3a8a; padding-bottom: 10px;">${userOfficeInfo.officeName}</h2>`;
+    if (userOfficeInfo.officeAddress || userOfficeInfo.officePhone) {
+      contentHtml += `<p style="text-align: center; color: #64748b; font-size: 11px; margin: -8px 0 8px;">${userOfficeInfo.officeAddress || ''}${userOfficeInfo.officeAddress && userOfficeInfo.officePhone ? ' — ' : ''}${userOfficeInfo.officePhone || ''}</p>`;
+    }
     contentHtml += `<h3 style="text-align: center; color: #334155; margin-bottom: 20px;">تقرير الموكل الشامل: ${client.client_name}</h3>`;
 
     contentHtml += '<h4 style="color: #1e3a8a; background: #eff6ff; padding: 8px 12px; border-radius: 6px; margin-bottom: 4px;">بيانات الموكل</h4>';
@@ -430,6 +561,9 @@ export default function DashboardContent() {
     }
 
     contentHtml += `<div style="margin-top: 30px; text-align: center; font-size: 12px; color: #64748b;">تاريخ الطباعة: ${new Date().toLocaleDateString('ar-EG')}</div>`;
+    if (userOfficeInfo.reportFooter) {
+      contentHtml += `<div style="margin-top: 6px; text-align: center; font-size: 11px; color: #94a3b8;">${userOfficeInfo.reportFooter}</div>`;
+    }
     contentHtml += '</div>';
 
     openPrintFrame(`تقرير الموكل - ${client.client_name}`, contentHtml);
@@ -441,6 +575,9 @@ export default function DashboardContent() {
 
     let contentHtml = '<div style="font-family: \'Cairo\', sans-serif; direction: rtl; padding: 20px; color: #111;">';
     contentHtml += `<h2 style="text-align: center; color: #1e3a8a; border-bottom: 2px solid #1e3a8a; padding-bottom: 10px;">${userOfficeInfo.officeName}</h2>`;
+    if (userOfficeInfo.officeAddress || userOfficeInfo.officePhone) {
+      contentHtml += `<p style="text-align: center; color: #64748b; font-size: 11px; margin: -8px 0 8px;">${userOfficeInfo.officeAddress || ''}${userOfficeInfo.officeAddress && userOfficeInfo.officePhone ? ' — ' : ''}${userOfficeInfo.officePhone || ''}</p>`;
+    }
     contentHtml += `<h3 style="text-align: center; color: #334155; margin-bottom: 20px;">تقرير القضية رقم: ${caseObj.case_number || '-'}</h3>`;
 
     if (relatedClient) {
@@ -487,6 +624,9 @@ export default function DashboardContent() {
     }
 
     contentHtml += `<div style="margin-top: 30px; text-align: center; font-size: 12px; color: #64748b;">تاريخ الطباعة: ${new Date().toLocaleDateString('ar-EG')}</div>`;
+    if (userOfficeInfo.reportFooter) {
+      contentHtml += `<div style="margin-top: 6px; text-align: center; font-size: 11px; color: #94a3b8;">${userOfficeInfo.reportFooter}</div>`;
+    }
     contentHtml += '</div>';
 
     openPrintFrame(`تقرير القضية - ${caseObj.case_number}`, contentHtml);
@@ -498,6 +638,9 @@ export default function DashboardContent() {
 
     let contentHtml = '<div style="font-family: \'Cairo\', sans-serif; direction: rtl; padding: 20px; color: #111;">';
     contentHtml += `<h2 style="text-align: center; color: #1e3a8a; border-bottom: 2px solid #1e3a8a; padding-bottom: 10px;">${userOfficeInfo.officeName}</h2>`;
+    if (userOfficeInfo.officeAddress || userOfficeInfo.officePhone) {
+      contentHtml += `<p style="text-align: center; color: #64748b; font-size: 11px; margin: -8px 0 8px;">${userOfficeInfo.officeAddress || ''}${userOfficeInfo.officeAddress && userOfficeInfo.officePhone ? ' — ' : ''}${userOfficeInfo.officePhone || ''}</p>`;
+    }
     contentHtml += `<h3 style="text-align: center; color: #334155; margin-bottom: 20px;">تقرير حدث / جلسة: ${eventObj.event_name || '-'}</h3>`;
 
     contentHtml += '<h4 style="color: #1e3a8a; background: #eff6ff; padding: 8px 12px; border-radius: 6px; margin-bottom: 4px;">بيانات الحدث</h4>';
@@ -517,6 +660,9 @@ export default function DashboardContent() {
     }
 
     contentHtml += `<div style="margin-top: 30px; text-align: center; font-size: 12px; color: #64748b;">تاريخ الطباعة: ${new Date().toLocaleDateString('ar-EG')}</div>`;
+    if (userOfficeInfo.reportFooter) {
+      contentHtml += `<div style="margin-top: 6px; text-align: center; font-size: 11px; color: #94a3b8;">${userOfficeInfo.reportFooter}</div>`;
+    }
     contentHtml += '</div>';
 
     openPrintFrame(`تقرير حدث - ${eventObj.event_name}`, contentHtml);
@@ -531,6 +677,9 @@ export default function DashboardContent() {
 
     let contentHtml = '<div style="font-family: \'Cairo\', sans-serif; direction: rtl; padding: 20px; color: #111;">';
     contentHtml += `<h2 style="text-align: center; color: #1e3a8a; border-bottom: 2px solid #1e3a8a; padding-bottom: 10px;">${userOfficeInfo.officeName}</h2>`;
+    if (userOfficeInfo.officeAddress || userOfficeInfo.officePhone) {
+      contentHtml += `<p style="text-align: center; color: #64748b; font-size: 11px; margin: -8px 0 8px;">${userOfficeInfo.officeAddress || ''}${userOfficeInfo.officeAddress && userOfficeInfo.officePhone ? ' — ' : ''}${userOfficeInfo.officePhone || ''}</p>`;
+    }
     contentHtml += `<h3 style="text-align: center; color: #334155; margin-bottom: 20px;">أجندة شهر ${monthNames[month]} ${year}</h3>`;
 
     if (monthEvents.length === 0) {
@@ -567,6 +716,9 @@ export default function DashboardContent() {
     }
 
     contentHtml += `<div style="margin-top: 30px; text-align: center; font-size: 12px; color: #64748b;">تاريخ الطباعة: ${new Date().toLocaleDateString('ar-EG')}</div>`;
+    if (userOfficeInfo.reportFooter) {
+      contentHtml += `<div style="margin-top: 6px; text-align: center; font-size: 11px; color: #94a3b8;">${userOfficeInfo.reportFooter}</div>`;
+    }
     contentHtml += '</div>';
 
     openPrintFrame(`أجندة شهر ${monthNames[month]} ${year}`, contentHtml);
@@ -575,6 +727,9 @@ export default function DashboardContent() {
   const handlePrintRecord = (title: string, dataObj: any) => {
     let contentHtml = '<div style="font-family: \'Cairo\', sans-serif; direction: rtl; padding: 20px; color: #111;">';
     contentHtml += `<h2 style="text-align: center; color: #1e3a8a; border-bottom: 2px solid #1e3a8a; padding-bottom: 10px;">${userOfficeInfo.officeName}</h2>`;
+    if (userOfficeInfo.officeAddress || userOfficeInfo.officePhone) {
+      contentHtml += `<p style="text-align: center; color: #64748b; font-size: 11px; margin: -8px 0 8px;">${userOfficeInfo.officeAddress || ''}${userOfficeInfo.officeAddress && userOfficeInfo.officePhone ? ' — ' : ''}${userOfficeInfo.officePhone || ''}</p>`;
+    }
     contentHtml += `<h3 style="text-align: center; color: #334155; margin-bottom: 20px;">تقرير تفصيلي: ${title}</h3>`;
     contentHtml += '<table style="width: 100%; border-collapse: collapse; margin-top: 20px;">';
     for (const [key, value] of Object.entries(dataObj)) {
@@ -596,6 +751,25 @@ export default function DashboardContent() {
   const handleAddDynamicOption = async (listType: string, rawValue: string) => {
     const trimmed = rawValue.trim();
     if (!trimmed) return;
+    const editingRowId = optionPrompt?.editingRowId;
+
+    if (editingRowId) {
+      const { error } = await supabase.from('option_lists').update({ value: trimmed }).eq('id', editingRowId);
+      if (error) {
+        alert('فشل تعديل القيمة: ' + error.message);
+        return;
+      }
+      const oldRow = optionListRows.find((r) => r.id === editingRowId);
+      const oldValue = oldRow?.value;
+      setOptionListRows((prev) => prev.map((r) => (r.id === editingRowId ? { ...r, value: trimmed } : r)));
+      setOptionLists((prev) => ({
+        ...prev,
+        [listType]: (prev[listType] || []).map((v) => (v === oldValue ? trimmed : v)),
+      }));
+      setOptionPrompt(null);
+      return;
+    }
+
     const currentList = optionLists[listType] || [];
     if (currentList.includes(trimmed)) {
       setOptionPrompt(null);
@@ -604,11 +778,12 @@ export default function DashboardContent() {
 
     const userId = localStorage.getItem('lawyer_id');
     if (userId) {
-      const { error } = await supabase.from('option_lists').insert([{ user_id: userId, list_type: listType, value: trimmed }]);
+      const { data, error } = await supabase.from('option_lists').insert([{ user_id: userId, list_type: listType, value: trimmed }]).select().single();
       if (error) {
         alert('فشل حفظ الخيار الجديد: ' + error.message);
         return;
       }
+      if (data) setOptionListRows((prev) => [...prev, data]);
     }
     setOptionLists((prev) => ({ ...prev, [listType]: [...(prev[listType] || []), trimmed] }));
     setOptionPrompt(null);
@@ -772,21 +947,21 @@ export default function DashboardContent() {
   };
 
   const filteredClients = clients.filter(c => c.client_name?.toLowerCase().includes(clientSearch.toLowerCase()));
-  const displayedClients = showAllClientsOverride ? filteredClients : filteredClients.slice(0, 3);
+  const displayedClients = showAllClientsOverride ? filteredClients : filteredClients.slice(0, displayLimits.clients);
 
   const filteredCases = cases.filter(cs => {
     const matchesSearch = cs.case_number?.toLowerCase().includes(caseSearch.toLowerCase()) || cs.opponent_name?.toLowerCase().includes(caseSearch.toLowerCase());
     const matchesClientFilter = (selectedClientIdFilter && !showAllCasesOverride) ? cs.client_id === selectedClientIdFilter : true;
     return matchesSearch && matchesClientFilter;
   });
-  const displayedCases = showAllCasesOverride ? filteredCases : filteredCases.slice(0, 5);
+  const displayedCases = showAllCasesOverride ? filteredCases : filteredCases.slice(0, displayLimits.cases);
 
   const filteredEvents = events.filter(ev => {
     const matchesSearch = ev.event_name?.toLowerCase().includes(eventSearch.toLowerCase()) || ev.cases?.case_number?.toLowerCase().includes(eventSearch.toLowerCase());
     const matchesCaseFilter = (selectedCaseIdFilter && !showAllEventsOverride) ? ev.case_id === selectedCaseIdFilter : true;
     return matchesSearch && matchesCaseFilter;
   });
-  const displayedEvents = showAllEventsOverride ? filteredEvents : filteredEvents.slice(0, 10);
+  const displayedEvents = showAllEventsOverride ? filteredEvents : filteredEvents.slice(0, displayLimits.events);
 
   const todayStr = new Date().toISOString().split('T')[0];
   const tomorrowObj = new Date();
@@ -972,7 +1147,7 @@ export default function DashboardContent() {
             <div className="flex items-center gap-4">
               <label className="flex items-center gap-2 text-xs font-bold text-slate-700 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition">
                 <input type="checkbox" checked={showAllClientsOverride} onChange={(e) => setShowAllClientsOverride(e.target.checked)} className="w-4 h-4 text-blue-900 rounded focus:ring-blue-900" />
-                <span>عرض كل الموكلين (تجاوز حد 3)</span>
+                <span>عرض كل الموكلين (تجاوز حد {displayLimits.clients})</span>
               </label>
               <button onClick={() => checkTrialLimitAndOpen('clients', () => { setEditingClient(null); setShowClientModal(true); })} className="bg-blue-900 hover:bg-blue-950 text-white px-4 py-2 rounded-xl flex items-center gap-1.5 text-sm font-bold shadow-sm transition">
                 <Plus className="w-4 h-4" /> إضافة موكل جديد
@@ -1049,7 +1224,7 @@ export default function DashboardContent() {
             <div className="flex items-center gap-4">
               <label className="flex items-center gap-2 text-xs font-bold text-slate-700 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition">
                 <input type="checkbox" checked={showAllCasesOverride} onChange={(e) => setShowAllCasesOverride(e.target.checked)} className="w-4 h-4 text-rose-800 rounded focus:ring-rose-800" />
-                <span>عرض كل القضايا (تجاوز حد 5)</span>
+                <span>عرض كل القضايا (تجاوز حد {displayLimits.cases})</span>
               </label>
               <button onClick={() => checkTrialLimitAndOpen('cases', () => { setEditingCase(null); setShowCaseModal(true); })} className="bg-rose-800 hover:bg-rose-900 text-white px-4 py-2 rounded-xl flex items-center gap-1.5 text-sm font-bold shadow-sm transition">
                 <Plus className="w-4 h-4" /> إضافة قضية جديدة
@@ -1124,7 +1299,7 @@ export default function DashboardContent() {
             <div className="flex items-center gap-4">
               <label className="flex items-center gap-2 text-xs font-bold text-slate-700 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition">
                 <input type="checkbox" checked={showAllEventsOverride} onChange={(e) => setShowAllEventsOverride(e.target.checked)} className="w-4 h-4 text-emerald-700 rounded focus:ring-emerald-700" />
-                <span>عرض كل الأحداث (تجاوز حد 10)</span>
+                <span>عرض كل الأحداث (تجاوز حد {displayLimits.events})</span>
               </label>
               <button onClick={() => checkTrialLimitAndOpen('events', () => { setEditingEvent(null); setShowEventModal(true); })} className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 rounded-xl flex items-center gap-1.5 text-sm font-bold shadow-sm transition">
                 <Plus className="w-4 h-4" /> إضافة حدث جديد
@@ -1635,7 +1810,7 @@ export default function DashboardContent() {
               </div>
 
               <div className="pt-2 space-y-2">
-                <button onClick={() => { setSidebarOpen(false); setSettingsOfficeName(userOfficeInfo.officeName); setShowSettingsModal(true); }} className="w-full text-right px-4 py-3 bg-slate-800/60 hover:bg-slate-800 text-slate-200 rounded-xl font-bold text-sm transition flex items-center gap-3 border border-slate-700/50">
+                <button onClick={() => { setSidebarOpen(false); setSettingsOfficeName(userOfficeInfo.officeName); setSettingsOfficeAddress(userOfficeInfo.officeAddress); setSettingsOfficePhone(userOfficeInfo.officePhone); setSettingsReportFooter(userOfficeInfo.reportFooter); setSettingsTab('office'); setShowSettingsModal(true); }} className="w-full text-right px-4 py-3 bg-slate-800/60 hover:bg-slate-800 text-slate-200 rounded-xl font-bold text-sm transition flex items-center gap-3 border border-slate-700/50">
                   <Settings className="w-4 h-4 text-slate-400" /> الإعدادات
                 </button>
                 <button onClick={() => { setSidebarOpen(false); setShowContactModal(true); }} className="w-full text-right px-4 py-3 bg-slate-800/60 hover:bg-slate-800 text-slate-200 rounded-xl font-bold text-sm transition flex items-center gap-3 border border-slate-700/50">
@@ -1659,24 +1834,168 @@ export default function DashboardContent() {
       {/* نافذة الإعدادات */}
       {showSettingsModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
-            <div className="flex justify-between items-center mb-4 border-b pb-3">
+          <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-100 max-h-[88vh] flex flex-col overflow-hidden">
+            <div className="flex justify-between items-center px-6 py-4 border-b">
               <h3 className="text-xl font-bold text-blue-950">الإعدادات</h3>
               <button onClick={() => setShowSettingsModal(false)} className="p-2 hover:bg-gray-100 rounded-full"><X className="w-6 h-6" /></button>
             </div>
-            <form onSubmit={handleSaveOfficeName} className="space-y-4 text-sm">
-              <div>
-                <label className="block font-bold mb-1 text-slate-700">اسم المكتب</label>
-                <input type="text" value={settingsOfficeName} onChange={(e) => setSettingsOfficeName(e.target.value)} required className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-900" />
-                <p className="text-xs text-slate-500 mt-1">الاسم ده هيظهر في الهيدر وفي كل التقارير المطبوعة.</p>
-              </div>
-              <div className="flex justify-end gap-2 pt-4 border-t">
-                <button type="button" onClick={() => setShowSettingsModal(false)} className="px-5 py-2.5 bg-gray-100 rounded-xl font-bold">إلغاء</button>
-                <button type="submit" disabled={settingsSaving} className="px-5 py-2.5 bg-blue-900 text-white rounded-xl font-bold shadow disabled:opacity-60">
-                  {settingsSaving ? 'جاري الحفظ...' : 'حفظ'}
+
+            <div className="flex gap-1 px-6 pt-3 border-b overflow-x-auto">
+              {[
+                { key: 'office', label: 'بيانات المكتب' },
+                { key: 'reports', label: 'التقارير' },
+                { key: 'security', label: 'الأمان' },
+                { key: 'lists', label: 'القوائم' },
+                { key: 'display', label: 'العرض' },
+              ].map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setSettingsTab(tab.key as any)}
+                  className={`px-3 py-2 text-xs font-bold rounded-t-lg whitespace-nowrap transition ${settingsTab === tab.key ? 'bg-blue-900 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+                >
+                  {tab.label}
                 </button>
-              </div>
-            </form>
+              ))}
+            </div>
+
+            <div className="p-6 overflow-y-auto text-sm">
+              {/* تبويب بيانات المكتب */}
+              {settingsTab === 'office' && (
+                <form onSubmit={handleSaveOfficeName} className="space-y-4">
+                  <div>
+                    <label className="block font-bold mb-1 text-slate-700">اسم المكتب</label>
+                    <input type="text" value={settingsOfficeName} onChange={(e) => setSettingsOfficeName(e.target.value)} required className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-900" />
+                  </div>
+                  <div>
+                    <label className="block font-bold mb-1 text-slate-700">عنوان المكتب</label>
+                    <input type="text" value={settingsOfficeAddress} onChange={(e) => setSettingsOfficeAddress(e.target.value)} className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-900" />
+                  </div>
+                  <div>
+                    <label className="block font-bold mb-1 text-slate-700">هاتف المكتب</label>
+                    <input type="text" value={settingsOfficePhone} onChange={(e) => setSettingsOfficePhone(e.target.value)} className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-900" dir="ltr" />
+                  </div>
+                  <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                    <div className="w-10 h-10 rounded-lg overflow-hidden bg-blue-600/30 flex items-center justify-center shrink-0">
+                      <img src={userOfficeInfo.logoUrl || '/default-logo.svg'} alt="اللوجو" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-bold text-slate-700 text-xs mb-1">لوجو المكتب</p>
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => logoInputRef.current?.click()} className="text-xs bg-blue-50 text-blue-900 hover:bg-blue-100 font-bold px-2.5 py-1 rounded-lg border border-blue-200 transition">تغيير</button>
+                        {userOfficeInfo.logoUrl && (
+                          <button type="button" onClick={handleResetLogo} className="text-xs bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold px-2.5 py-1 rounded-lg border border-rose-200 transition">استخدام الافتراضي</button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex justify-end pt-2">
+                    <button type="submit" disabled={settingsSaving} className="px-5 py-2.5 bg-blue-900 text-white rounded-xl font-bold shadow disabled:opacity-60">
+                      {settingsSaving ? 'جاري الحفظ...' : 'حفظ بيانات المكتب'}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* تبويب التقارير */}
+              {settingsTab === 'reports' && (
+                <form onSubmit={handleSaveOfficeName} className="space-y-4">
+                  <div>
+                    <label className="block font-bold mb-1 text-slate-700">نص تذييل مخصص للتقارير</label>
+                    <textarea value={settingsReportFooter} onChange={(e) => setSettingsReportFooter(e.target.value)} rows={2} placeholder="مثال: هذا التقرير سري وصادر عن المكتب فقط" className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-900"></textarea>
+                    <p className="text-xs text-slate-500 mt-1">هيظهر تحت تاريخ الطباعة في كل التقارير (الموكل، القضية، الحدث، الأجندة، دليل المحامين).</p>
+                  </div>
+                  <div className="flex justify-end pt-2">
+                    <button type="submit" disabled={settingsSaving} className="px-5 py-2.5 bg-blue-900 text-white rounded-xl font-bold shadow disabled:opacity-60">
+                      {settingsSaving ? 'جاري الحفظ...' : 'حفظ'}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* تبويب الأمان */}
+              {settingsTab === 'security' && (
+                <div className="space-y-6">
+                  <form onSubmit={handleChangePassword} className="space-y-3 pb-4 border-b">
+                    <h4 className="font-bold text-blue-950">تغيير كلمة المرور</h4>
+                    <input type="password" placeholder="كلمة المرور الجديدة" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-900" />
+                    <input type="password" placeholder="تأكيد كلمة المرور" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-900" />
+                    {passwordMsg && <p className="text-xs">{passwordMsg}</p>}
+                    <div className="flex justify-end">
+                      <button type="submit" disabled={passwordSaving} className="px-4 py-2 bg-blue-900 text-white rounded-xl font-bold text-xs shadow disabled:opacity-60">
+                        {passwordSaving ? 'جاري الحفظ...' : 'تغيير كلمة المرور'}
+                      </button>
+                    </div>
+                  </form>
+
+                  <form onSubmit={handleChangeEmail} className="space-y-3">
+                    <h4 className="font-bold text-blue-950">تغيير البريد الإلكتروني</h4>
+                    <input type="email" placeholder="البريد الإلكتروني الجديد" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-900" dir="ltr" />
+                    {emailMsg && <p className="text-xs">{emailMsg}</p>}
+                    <div className="flex justify-end">
+                      <button type="submit" disabled={emailSaving} className="px-4 py-2 bg-blue-900 text-white rounded-xl font-bold text-xs shadow disabled:opacity-60">
+                        {emailSaving ? 'جاري الحفظ...' : 'تغيير البريد'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* تبويب القوائم */}
+              {settingsTab === 'lists' && (
+                <div className="space-y-4">
+                  <p className="text-xs text-slate-500">القيم اللي أضفتها بنفسك في القوائم المنسدلة. احذف أي قيمة مش محتاجها.</p>
+                  {Object.keys(listTypeLabels).map((listType) => {
+                    const rows = optionListRows.filter((r) => r.list_type === listType);
+                    if (rows.length === 0) return null;
+                    return (
+                      <div key={listType}>
+                        <h5 className="font-bold text-slate-700 text-xs mb-1.5">{listTypeLabels[listType]}</h5>
+                        <div className="flex flex-wrap gap-1.5">
+                          {rows.map((row) => (
+                            <span key={row.id} className="flex items-center gap-1 bg-slate-100 text-slate-700 text-xs px-2.5 py-1 rounded-full">
+                              {row.value}
+                              <button onClick={() => { setOptionPrompt({ title: listTypeLabels[listType], listType, editingRowId: row.id }); setOptionPromptValue(row.value); }} className="text-blue-600 hover:text-blue-800">
+                                <Edit className="w-3 h-3" />
+                              </button>
+                              <button onClick={() => handleDeleteOptionRow(row)} className="text-rose-500 hover:text-rose-700">
+                                <X className="w-3 h-3" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {optionListRows.length === 0 && (
+                    <p className="text-xs text-slate-400 text-center py-6">لسه معملتش أي إضافات في القوائم المنسدلة.</p>
+                  )}
+                </div>
+              )}
+
+              {/* تبويب العرض */}
+              {settingsTab === 'display' && (
+                <div className="space-y-4">
+                  <p className="text-xs text-slate-500">تحكم في عدد السجلات المعروضة افتراضياً في كل جدول قبل الضغط على "عرض الكل".</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block font-bold mb-1 text-slate-700 text-xs">الموكلين</label>
+                      <input type="number" min={1} value={displayLimitsDraft.clients} onChange={(e) => setDisplayLimitsDraft((p: any) => ({ ...p, clients: Number(e.target.value) }))} className="w-full border rounded-xl p-2 outline-none focus:ring-2 focus:ring-blue-900" />
+                    </div>
+                    <div>
+                      <label className="block font-bold mb-1 text-slate-700 text-xs">القضايا</label>
+                      <input type="number" min={1} value={displayLimitsDraft.cases} onChange={(e) => setDisplayLimitsDraft((p: any) => ({ ...p, cases: Number(e.target.value) }))} className="w-full border rounded-xl p-2 outline-none focus:ring-2 focus:ring-blue-900" />
+                    </div>
+                    <div>
+                      <label className="block font-bold mb-1 text-slate-700 text-xs">الأحداث</label>
+                      <input type="number" min={1} value={displayLimitsDraft.events} onChange={(e) => setDisplayLimitsDraft((p: any) => ({ ...p, events: Number(e.target.value) }))} className="w-full border rounded-xl p-2 outline-none focus:ring-2 focus:ring-blue-900" />
+                    </div>
+                  </div>
+                  <div className="flex justify-end pt-2">
+                    <button onClick={handleSaveDisplayLimits} className="px-5 py-2.5 bg-blue-900 text-white rounded-xl font-bold shadow text-sm">حفظ إعدادات العرض</button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1920,7 +2239,7 @@ export default function DashboardContent() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[70] p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100">
             <div className="flex justify-between items-center mb-4 border-b pb-3">
-              <h3 className="text-lg font-bold text-blue-950">إضافة بند جديد لـ {optionPrompt.title}</h3>
+              <h3 className="text-lg font-bold text-blue-950">{optionPrompt.editingRowId ? 'تعديل قيمة في' : 'إضافة بند جديد لـ'} {optionPrompt.title}</h3>
               <button onClick={() => setOptionPrompt(null)} className="p-2 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
             </div>
             <form
@@ -1932,12 +2251,12 @@ export default function DashboardContent() {
                 autoFocus
                 value={optionPromptValue}
                 onChange={(e) => setOptionPromptValue(e.target.value)}
-                placeholder={`اكتب قيمة ${optionPrompt.title} الجديدة...`}
+                placeholder={`اكتب قيمة ${optionPrompt.title}...`}
                 className="w-full border rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-900"
               />
               <div className="flex justify-end gap-2 pt-2 border-t">
                 <button type="button" onClick={() => setOptionPrompt(null)} className="px-4 py-2 bg-gray-100 rounded-xl font-bold text-sm">إلغاء</button>
-                <button type="submit" className="px-4 py-2 bg-blue-900 text-white rounded-xl font-bold text-sm shadow">إضافة</button>
+                <button type="submit" className="px-4 py-2 bg-blue-900 text-white rounded-xl font-bold text-sm shadow">{optionPrompt.editingRowId ? 'حفظ التعديل' : 'إضافة'}</button>
               </div>
             </form>
           </div>
