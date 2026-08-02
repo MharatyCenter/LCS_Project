@@ -68,12 +68,30 @@ export default function AuthManager({ onAuthSuccess }: Props) {
         localStorage.setItem('saved_lawyer_email', form.email);
 
         // نبحث عن بيانات المكتب المرتبطة بحساب الدخول ده تحديداً (صف صاحب الحساب فقط)
-        const { data: lawyerData } = await supabase
+        let { data: lawyerData } = await supabase
           .from('lawyers')
           .select('*')
           .eq('user_id', authUserId)
           .eq('is_owner', true)
           .maybeSingle();
+
+        // إصلاح ذاتي: لو الحساب مسجل دخول لكن معندوش صف "صاحب حساب" (بسبب مشكلة قديمة)، ننشئه تلقائياً الآن
+        if (!lawyerData) {
+          const { data: healedRow } = await supabase
+            .from('lawyers')
+            .insert([
+              {
+                user_id: authUserId,
+                lawyer_name: form.email.split('@')[0],
+                email: form.email,
+                office_name: 'المكتب القانوني',
+                is_owner: true,
+              },
+            ])
+            .select()
+            .maybeSingle();
+          lawyerData = healedRow;
+        }
 
         localStorage.setItem('lawyer_id', authUserId);
         localStorage.setItem('lawyer_name', lawyerData?.lawyer_name || form.email.split('@')[0]);

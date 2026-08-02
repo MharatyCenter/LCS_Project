@@ -65,7 +65,7 @@ export default function DashboardContent() {
   const [showAllCasesOverride, setShowAllCasesOverride] = useState(false);
   const [showAllEventsOverride, setShowAllEventsOverride] = useState(false);
 
-  const [expandStats, setExpandStats] = useState(false);
+  const [expandStats, setExpandStats] = useState(true);
   const [expandClients, setExpandClients] = useState(false);
   const [expandCases, setExpandCases] = useState(false);
   const [expandEvents, setExpandEvents] = useState(false);
@@ -91,11 +91,13 @@ export default function DashboardContent() {
     officeAddress: '',
     officePhone: '',
     reportFooter: '',
+    subscriptionStatus: 'trial' as string,
+    subscriptionExpiry: null as string | null,
   });
   const [logoUploading, setLogoUploading] = useState(false);
   const logoInputRef = React.useRef<HTMLInputElement>(null);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<'office' | 'reports' | 'security' | 'lists' | 'display'>('office');
+  const [settingsTab, setSettingsTab] = useState<'office' | 'reports' | 'security' | 'lists' | 'display' | 'subscription'>('office');
   const [showContactModal, setShowContactModal] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [settingsOfficeName, setSettingsOfficeName] = useState('');
@@ -112,6 +114,16 @@ export default function DashboardContent() {
   const [newEmail, setNewEmail] = useState('');
   const [emailSaving, setEmailSaving] = useState(false);
   const [emailMsg, setEmailMsg] = useState<string | null>(null);
+
+  const [activationCode, setActivationCode] = useState('');
+  const [activationSaving, setActivationSaving] = useState(false);
+  const [activationMsg, setActivationMsg] = useState<string | null>(null);
+
+  const [supportName, setSupportName] = useState('');
+  const [supportEmail, setSupportEmail] = useState('');
+  const [supportMessage, setSupportMessage] = useState('');
+  const [supportSending, setSupportSending] = useState(false);
+  const [supportMsgStatus, setSupportMsgStatus] = useState<string | null>(null);
 
   const listTypeLabels: Record<string, string> = {
     client_type: 'نوع الموكل',
@@ -200,7 +212,7 @@ export default function DashboardContent() {
     if (!userId) return;
     const { data, error } = await supabase
       .from('lawyers')
-      .select('office_name, logo_url, office_address, office_phone, report_footer')
+      .select('office_name, logo_url, office_address, office_phone, report_footer, subscription_status, subscription_expiry')
       .eq('user_id', userId)
       .eq('is_owner', true)
       .maybeSingle();
@@ -213,6 +225,8 @@ export default function DashboardContent() {
         officeAddress: data.office_address || '',
         officePhone: data.office_phone || '',
         reportFooter: data.report_footer || '',
+        subscriptionStatus: data.subscription_status || 'trial',
+        subscriptionExpiry: data.subscription_expiry || null,
       }));
     }
   };
@@ -378,7 +392,13 @@ export default function DashboardContent() {
     }
   };
 
+  const isSubscribed = userOfficeInfo.subscriptionStatus === 'active' && !!userOfficeInfo.subscriptionExpiry && new Date(userOfficeInfo.subscriptionExpiry) > new Date();
+
   const checkTrialLimitAndOpen = (type: 'clients' | 'cases' | 'events', openFn: () => void) => {
+    if (isSubscribed) {
+      openFn();
+      return;
+    }
     const counts = { clients: clients.length, cases: cases.length, events: events.length };
     const labels = { clients: 'الموكلين', cases: 'القضايا', events: 'الأحداث' };
     if (counts[type] >= TRIAL_LIMITS[type]) {
@@ -387,6 +407,80 @@ export default function DashboardContent() {
       return;
     }
     openFn();
+  };
+
+  const handleRedeemActivationCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activationCode.trim()) return;
+    setActivationSaving(true);
+    setActivationMsg(null);
+    try {
+      const { data, error } = await supabase.rpc('redeem_activation_code', { code_input: activationCode.trim() });
+      if (error) throw error;
+      if (data?.success) {
+        setActivationMsg('✅ تم تفعيل الاشتراك بنجاح!');
+        setActivationCode('');
+        fetchOfficeInfo();
+      } else {
+        setActivationMsg('❌ ' + (data?.message || 'الكود غير صحيح'));
+      }
+    } catch (err: any) {
+      setActivationMsg('❌ حدث خطأ: ' + (err.message || 'خطأ غير متوقع'));
+    } finally {
+      setActivationSaving(false);
+    }
+  };
+
+  const [startFreshLoading, setStartFreshLoading] = useState(false);
+
+  const handleSendSupportMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSupportMsgStatus(null);
+    setSupportSending(true);
+    try {
+      const { error } = await supabase.from('support_messages').insert([{
+        user_id: localStorage.getItem('lawyer_id'),
+        sender_name: supportName.trim(),
+        sender_email: supportEmail.trim(),
+        message: supportMessage.trim(),
+      }]);
+      if (error) throw error;
+      setSupportMsgStatus('✅ تم إرسال رسالتك بنجاح، هنتواصل معاك قريباً.');
+      setSupportName('');
+      setSupportEmail('');
+      setSupportMessage('');
+    } catch (err: any) {
+      setSupportMsgStatus('❌ فشل الإرسال: ' + (err.message || 'خطأ غير متوقع'));
+    } finally {
+      setSupportSending(false);
+    }
+  };
+
+  const handleStartFresh = async () => {
+    const firstConfirm = confirm('هيتم حذف كل الموكلين والقضايا والأحداث المسجلة حالياً نهائياً ولا يمكن التراجع. متأكد؟');
+    if (!firstConfirm) return;
+    const secondConfirm = confirm('تأكيد أخير: هل أنت متأكد 100% من حذف كل البيانات والبدء من جديد؟');
+    if (!secondConfirm) return;
+
+    const userId = localStorage.getItem('lawyer_id');
+    if (!userId) return;
+
+    setStartFreshLoading(true);
+    try {
+      await supabase.from('events').delete().eq('user_id', userId);
+      await supabase.from('cases').delete().eq('user_id', userId);
+      await supabase.from('clients').delete().eq('user_id', userId);
+      await supabase.from('option_lists').delete().eq('user_id', userId);
+      await supabase.from('lawyers').delete().eq('user_id', userId).eq('is_owner', false);
+      await fetchAllData();
+      await fetchOptionLists();
+      await fetchLawyersDirectory();
+      alert('✅ تم البدء من جديد، كل بياناتك القديمة اتمسحت.');
+    } catch (err: any) {
+      alert('فشل الحذف: ' + (err.message || 'خطأ غير متوقع'));
+    } finally {
+      setStartFreshLoading(false);
+    }
   };
 
   const handleDelete = async (table: string, id: number) => {
@@ -836,7 +930,7 @@ export default function DashboardContent() {
 
   const handleClientSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!editingClient && clients.length >= TRIAL_LIMITS.clients) {
+    if (!editingClient && !isSubscribed && clients.length >= TRIAL_LIMITS.clients) {
       setShowClientModal(false);
       setUpgradeReason('الموكلين');
       setShowUpgradeModal(true);
@@ -874,7 +968,7 @@ export default function DashboardContent() {
 
   const handleCaseSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!editingCase && cases.length >= TRIAL_LIMITS.cases) {
+    if (!editingCase && !isSubscribed && cases.length >= TRIAL_LIMITS.cases) {
       setShowCaseModal(false);
       setUpgradeReason('القضايا');
       setShowUpgradeModal(true);
@@ -913,7 +1007,7 @@ export default function DashboardContent() {
 
   const handleEventSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!editingEvent && events.length >= TRIAL_LIMITS.events) {
+    if (!editingEvent && !isSubscribed && events.length >= TRIAL_LIMITS.events) {
       setShowEventModal(false);
       setUpgradeReason('الأحداث');
       setShowUpgradeModal(true);
@@ -1152,7 +1246,7 @@ export default function DashboardContent() {
               <button onClick={() => checkTrialLimitAndOpen('clients', () => { setEditingClient(null); setShowClientModal(true); })} className="bg-blue-900 hover:bg-blue-950 text-white px-4 py-2 rounded-xl flex items-center gap-1.5 text-sm font-bold shadow-sm transition">
                 <Plus className="w-4 h-4" /> إضافة موكل جديد
               </button>
-              <span className="text-[11px] text-slate-400 font-bold">{clients.length}/{TRIAL_LIMITS.clients}</span>
+              <span className="text-[11px] text-slate-400 font-bold">{isSubscribed ? 'غير محدود ✅' : `${clients.length}/${TRIAL_LIMITS.clients}`}</span>
             </div>
           </div>
           <div className="relative w-full">
@@ -1229,7 +1323,7 @@ export default function DashboardContent() {
               <button onClick={() => checkTrialLimitAndOpen('cases', () => { setEditingCase(null); setShowCaseModal(true); })} className="bg-rose-800 hover:bg-rose-900 text-white px-4 py-2 rounded-xl flex items-center gap-1.5 text-sm font-bold shadow-sm transition">
                 <Plus className="w-4 h-4" /> إضافة قضية جديدة
               </button>
-              <span className="text-[11px] text-slate-400 font-bold">{cases.length}/{TRIAL_LIMITS.cases}</span>
+              <span className="text-[11px] text-slate-400 font-bold">{isSubscribed ? 'غير محدود ✅' : `${cases.length}/${TRIAL_LIMITS.cases}`}</span>
             </div>
           </div>
           <div className="relative w-full">
@@ -1304,7 +1398,7 @@ export default function DashboardContent() {
               <button onClick={() => checkTrialLimitAndOpen('events', () => { setEditingEvent(null); setShowEventModal(true); })} className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 rounded-xl flex items-center gap-1.5 text-sm font-bold shadow-sm transition">
                 <Plus className="w-4 h-4" /> إضافة حدث جديد
               </button>
-              <span className="text-[11px] text-slate-400 font-bold">{events.length}/{TRIAL_LIMITS.events}</span>
+              <span className="text-[11px] text-slate-400 font-bold">{isSubscribed ? 'غير محدود ✅' : `${events.length}/${TRIAL_LIMITS.events}`}</span>
             </div>
           </div>
           <div className="relative w-full">
@@ -1813,7 +1907,7 @@ export default function DashboardContent() {
                 <button onClick={() => { setSidebarOpen(false); setSettingsOfficeName(userOfficeInfo.officeName); setSettingsOfficeAddress(userOfficeInfo.officeAddress); setSettingsOfficePhone(userOfficeInfo.officePhone); setSettingsReportFooter(userOfficeInfo.reportFooter); setSettingsTab('office'); setShowSettingsModal(true); }} className="w-full text-right px-4 py-3 bg-slate-800/60 hover:bg-slate-800 text-slate-200 rounded-xl font-bold text-sm transition flex items-center gap-3 border border-slate-700/50">
                   <Settings className="w-4 h-4 text-slate-400" /> الإعدادات
                 </button>
-                <button onClick={() => { setSidebarOpen(false); setShowContactModal(true); }} className="w-full text-right px-4 py-3 bg-slate-800/60 hover:bg-slate-800 text-slate-200 rounded-xl font-bold text-sm transition flex items-center gap-3 border border-slate-700/50">
+                <button onClick={() => { setSidebarOpen(false); setSupportName(localStorage.getItem('lawyer_name') || ''); setSupportEmail(localStorage.getItem('saved_lawyer_email') || ''); setShowContactModal(true); }} className="w-full text-right px-4 py-3 bg-slate-800/60 hover:bg-slate-800 text-slate-200 rounded-xl font-bold text-sm transition flex items-center gap-3 border border-slate-700/50">
                   <MessageCircle className="w-4 h-4 text-slate-400" /> تواصل معنا
                 </button>
                 <button onClick={() => { setSidebarOpen(false); setShowLawyersListModal(true); }} className="w-full text-right px-4 py-3 bg-slate-800/60 hover:bg-slate-800 text-slate-200 rounded-xl font-bold text-sm transition flex items-center gap-3 border border-slate-700/50">
@@ -1847,6 +1941,7 @@ export default function DashboardContent() {
                 { key: 'security', label: 'الأمان' },
                 { key: 'lists', label: 'القوائم' },
                 { key: 'display', label: 'العرض' },
+                { key: 'subscription', label: 'الاشتراك' },
               ].map((tab) => (
                 <button
                   key={tab.key}
@@ -1995,6 +2090,59 @@ export default function DashboardContent() {
                   </div>
                 </div>
               )}
+
+              {/* تبويب الاشتراك */}
+              {settingsTab === 'subscription' && (
+                <div className="space-y-5">
+                  {isSubscribed ? (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
+                      <p className="font-bold text-emerald-800">✅ الاشتراك نشط</p>
+                      <p className="text-xs text-emerald-700 mt-1">
+                        صالح حتى: {new Date(userOfficeInfo.subscriptionExpiry as string).toLocaleDateString('ar-EG')}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
+                      <p className="font-bold text-amber-800">🕓 نسخة تجريبية</p>
+                      <p className="text-xs text-amber-700 mt-1">
+                        الحد الحالي: {TRIAL_LIMITS.clients} موكلين / {TRIAL_LIMITS.cases} قضايا / {TRIAL_LIMITS.events} أحداث
+                      </p>
+                    </div>
+                  )}
+
+                  <form onSubmit={handleRedeemActivationCode} className="space-y-3">
+                    <div>
+                      <label className="block font-bold mb-1 text-slate-700">كود التفعيل</label>
+                      <input type="text" value={activationCode} onChange={(e) => setActivationCode(e.target.value)} placeholder="أدخل كود التفعيل المرسل لك بعد السداد" className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-900" dir="ltr" />
+                    </div>
+                    {activationMsg && <p className="text-xs">{activationMsg}</p>}
+                    <div className="flex justify-end">
+                      <button type="submit" disabled={activationSaving} className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold shadow text-sm disabled:opacity-60">
+                        {activationSaving ? 'جاري التفعيل...' : (isSubscribed ? 'تجديد الاشتراك' : 'تفعيل الاشتراك')}
+                      </button>
+                    </div>
+                  </form>
+
+                  <p className="text-xs text-slate-400 text-center pt-2 border-t">
+                    عايز تشترك؟ راسلنا من "تواصل معنا" عشان نبعتلك كود التفعيل بعد السداد.
+                  </p>
+
+                  <div className="pt-4 border-t">
+                    <p className="text-xs text-slate-500 mb-2">
+                      لو عايز تبدأ بيانات نظيفة (مثلاً بعد ما خلصت فترة التجربة وعايز تشيل بيانات تجريبية):
+                    </p>
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-2 flex items-start gap-2">
+                      <span className="text-red-600 text-base leading-none">⚠️</span>
+                      <p className="text-xs text-red-700 leading-relaxed">
+                        تحذير: الزرار ده هيحذف <strong>كل</strong> الموكلين والقضايا والأحداث والقوائم المسجلة حالياً <strong>نهائياً وبدون أي إمكانية للتراجع</strong>. تأكد إنك مش محتاج أي حاجة من البيانات دي قبل ما تكمل.
+                      </p>
+                    </div>
+                    <button onClick={handleStartFresh} disabled={startFreshLoading} className="w-full bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 py-2.5 rounded-xl font-bold text-sm transition disabled:opacity-60">
+                      {startFreshLoading ? 'جاري الحذف...' : '🗑️ ابدأ من جديد (حذف كل البيانات الحالية)'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -2003,22 +2151,46 @@ export default function DashboardContent() {
       {/* نافذة تواصل معنا */}
       {showContactModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
-            <div className="flex justify-between items-center mb-4 border-b pb-3">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-100 max-h-[88vh] overflow-y-auto">
+            <div className="flex justify-between items-center px-6 py-4 border-b sticky top-0 bg-white">
               <h3 className="text-xl font-bold text-blue-950">تواصل معنا</h3>
               <button onClick={() => setShowContactModal(false)} className="p-2 hover:bg-gray-100 rounded-full"><X className="w-6 h-6" /></button>
             </div>
-            <div className="space-y-3 text-sm text-slate-700">
-              <p>لأي استفسار أو دعم فني بخصوص النظام، تقدر تتواصل معنا عبر:</p>
-              <div className="bg-slate-50 rounded-xl p-3 border border-slate-200">
-                <strong className="block text-slate-900">البريد الإلكتروني:</strong>
-                <span className="text-blue-700">support@example.com</span>
+
+            <div className="p-6 space-y-5 text-sm text-slate-700">
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs leading-relaxed text-blue-900">
+                نظام سحابي بسيط لإدارة المكتب القانوني: موكلين، قضايا، أجندة جلسات، تقارير احترافية، ودليل محامين - بأمان تام وهوية خاصة بمكتبك.
               </div>
-              <div className="bg-slate-50 rounded-xl p-3 border border-slate-200">
-                <strong className="block text-slate-900">الهاتف:</strong>
-                <span className="text-blue-700" dir="ltr">01000000000</span>
+
+              <div>
+                <h4 className="font-bold text-slate-900 mb-2 text-xs">وسائل التواصل</h4>
+                <div className="grid grid-cols-1 gap-2">
+                  <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 flex justify-between items-center">
+                    <span className="text-slate-500 text-xs">البريد الإلكتروني</span>
+                    <span className="text-blue-700 text-xs" dir="ltr">support@example.com</span>
+                  </div>
+                  <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 flex justify-between items-center">
+                    <span className="text-slate-500 text-xs">الهاتف</span>
+                    <span className="text-blue-700 text-xs" dir="ltr">01000000000</span>
+                  </div>
+                  <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 flex justify-between items-center">
+                    <span className="text-slate-500 text-xs">واتساب</span>
+                    <span className="text-blue-700 text-xs" dir="ltr">01000000000</span>
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">* عدّل البيانات دي بمعلومات التواصل الحقيقية بتاعتك.</p>
               </div>
-              <p className="text-xs text-slate-400">* عدّل البيانات دي في الكود بمعلومات التواصل الحقيقية بتاعتك.</p>
+
+              <form onSubmit={handleSendSupportMessage} className="space-y-3 pt-3 border-t">
+                <h4 className="font-bold text-slate-900 text-xs">أو ابعت رسالة مباشرة</h4>
+                <input type="text" placeholder="اسمك" value={supportName} onChange={(e) => setSupportName(e.target.value)} required className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-900 text-sm" />
+                <input type="email" placeholder="بريدك الإلكتروني" value={supportEmail} onChange={(e) => setSupportEmail(e.target.value)} required className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-900 text-sm" dir="ltr" />
+                <textarea placeholder="اكتب رسالتك أو استفسارك هنا..." value={supportMessage} onChange={(e) => setSupportMessage(e.target.value)} required rows={3} className="w-full border rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-900 text-sm"></textarea>
+                {supportMsgStatus && <p className="text-xs">{supportMsgStatus}</p>}
+                <button type="submit" disabled={supportSending} className="w-full bg-emerald-700 hover:bg-emerald-800 text-white py-2.5 rounded-xl font-bold text-sm transition disabled:opacity-60">
+                  {supportSending ? 'جاري الإرسال...' : 'إرسال الرسالة'}
+                </button>
+              </form>
             </div>
           </div>
         </div>
@@ -2173,7 +2345,10 @@ export default function DashboardContent() {
               اشترك دلوقتي عشان تفتح استخدام غير محدود لكل بيانات مكتبك، بس <strong className="text-emerald-700">150 جنيه شهرياً</strong> (تُدفع كل 6 شهور).
             </p>
             <div className="flex flex-col gap-2">
-              <button onClick={() => { setShowUpgradeModal(false); setShowContactModal(true); }} className="w-full bg-emerald-700 hover:bg-emerald-800 text-white py-2.5 rounded-xl font-bold text-sm transition">
+              <button onClick={() => { setShowUpgradeModal(false); setSettingsTab('subscription'); setShowSettingsModal(true); }} className="w-full bg-emerald-700 hover:bg-emerald-800 text-white py-2.5 rounded-xl font-bold text-sm transition">
+                عندي كود تفعيل
+              </button>
+              <button onClick={() => { setShowUpgradeModal(false); setSupportName(localStorage.getItem('lawyer_name') || ''); setSupportEmail(localStorage.getItem('saved_lawyer_email') || ''); setShowContactModal(true); }} className="w-full bg-blue-50 hover:bg-blue-100 text-blue-900 py-2.5 rounded-xl font-bold text-sm transition">
                 تواصل معنا للاشتراك
               </button>
               <button onClick={() => setShowUpgradeModal(false)} className="w-full bg-gray-100 hover:bg-gray-200 text-slate-700 py-2.5 rounded-xl font-bold text-sm transition">
