@@ -23,7 +23,6 @@ import {
   ImagePlus,
   Settings,
   MessageCircle,
-  UserCog,
   Sparkles
 } from 'lucide-react';
 
@@ -99,7 +98,6 @@ export default function DashboardContent() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [settingsTab, setSettingsTab] = useState<'office' | 'reports' | 'security' | 'lists' | 'display' | 'subscription'>('office');
   const [showContactModal, setShowContactModal] = useState(false);
-  const [showAdminModal, setShowAdminModal] = useState(false);
   const [settingsOfficeName, setSettingsOfficeName] = useState('');
   const [settingsOfficeAddress, setSettingsOfficeAddress] = useState('');
   const [settingsOfficePhone, setSettingsOfficePhone] = useState('');
@@ -1913,9 +1911,6 @@ export default function DashboardContent() {
                 <button onClick={() => { setSidebarOpen(false); setShowLawyersListModal(true); }} className="w-full text-right px-4 py-3 bg-slate-800/60 hover:bg-slate-800 text-slate-200 rounded-xl font-bold text-sm transition flex items-center gap-3 border border-slate-700/50">
                   <Users className="w-4 h-4 text-slate-400" /> المحامين
                 </button>
-                <button onClick={() => { setSidebarOpen(false); setShowAdminModal(true); }} className="w-full text-right px-4 py-3 bg-slate-800/60 hover:bg-slate-800 text-slate-200 rounded-xl font-bold text-sm transition flex items-center gap-3 border border-slate-700/50">
-                  <UserCog className="w-4 h-4 text-slate-400" /> إدارة المشرف
-                </button>
               </div>
             </div>
             <div className="border-t border-slate-800 pt-4 text-center">
@@ -2196,67 +2191,7 @@ export default function DashboardContent() {
         </div>
       )}
 
-      {/* نافذة إدارة المشرف */}
-      {showAdminModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 max-h-[85vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4 border-b pb-3">
-              <h3 className="text-xl font-bold text-blue-950">إدارة المشرف</h3>
-              <button onClick={() => setShowAdminModal(false)} className="p-2 hover:bg-gray-100 rounded-full"><X className="w-6 h-6" /></button>
-            </div>
-            <div className="space-y-3 text-sm">
-              <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 flex justify-between">
-                <span className="text-slate-500">اسم المشرف</span>
-                <strong className="text-slate-900">{localStorage.getItem('lawyer_name') || '-'}</strong>
-              </div>
-              <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 flex justify-between">
-                <span className="text-slate-500">اسم المكتب</span>
-                <strong className="text-slate-900">{userOfficeInfo.officeName}</strong>
-              </div>
-              <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 flex justify-between">
-                <span className="text-slate-500">حالة الحساب</span>
-                <strong className="text-emerald-700">نشط</strong>
-              </div>
-
-              <div className="pt-4 border-t">
-                <div className="flex justify-between items-center mb-3">
-                  <h4 className="font-bold text-blue-950">دليل المحامين</h4>
-                  <button onClick={() => { setEditingLawyer(null); setShowLawyerModal(true); }} className="bg-blue-900 hover:bg-blue-950 text-white px-3 py-1.5 rounded-lg flex items-center gap-1 text-xs font-bold transition">
-                    <Plus className="w-3.5 h-3.5" /> إضافة محامي جديد
-                  </button>
-                </div>
-                {lawyersDirectory.length === 0 ? (
-                  <p className="text-xs text-slate-400 text-center py-3">لا يوجد محامين مسجلين في الدليل حالياً.</p>
-                ) : (
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {lawyersDirectory.map((lw) => (
-                      <div key={lw.id} className="flex justify-between items-center bg-slate-50 border border-slate-200 rounded-xl p-2.5">
-                        <div>
-                          <div className="font-bold text-slate-900">
-                            {lw.lawyer_name} {lw.is_owner && <span className="text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-full mr-1">أنت (صاحب الحساب)</span>}
-                          </div>
-                          <div className="text-[11px] text-slate-500">{lw.phone || '-'} {lw.syndicate_number ? `— قيد رقم ${lw.syndicate_number}` : ''}</div>
-                        </div>
-                        <div className="flex gap-1.5">
-                          <button onClick={() => { setEditingLawyer(lw); setShowLawyerModal(true); }} className="p-1.5 text-blue-700 hover:bg-blue-50 rounded-lg transition" title="تعديل">
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          {!lw.is_owner && (
-                            <button onClick={() => handleDeleteLawyer(lw)} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition" title="حذف">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
+      
       {/* نافذة عرض دليل المحامين */}
       {showLawyersListModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
