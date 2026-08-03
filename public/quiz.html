@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>قيّم تنظيم مكتبك القانوني في دقيقتين — إيزي يوز</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy-950:#0b1730; --navy-900:#0f2049; --navy-800:#152a5e; --navy-700:#1e3a8a;
+    --gold-600:#b8863f; --gold-500:#d4a94a; --gold-400:#e8c877;
+    --paper:#faf6ec; --paper-line:#e7ddc4;
+    --ink:#1a2238; --ink-muted:#5b647a; --white:#fff;
+    --red:#b34747; --amber:#c98a2c; --green:#2f7d4f;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{font-family:'Cairo',sans-serif; background:var(--paper); color:var(--ink); min-height:100vh;}
+  .wrap{max-width:640px; margin:0 auto; padding:32px 20px 60px;}
+
+  .top{display:flex; align-items:center; gap:12px; margin-bottom:28px;}
+  .top svg{width:34px; height:34px;}
+  .top-name{font-weight:800; font-size:15px; color:var(--navy-900);}
+  .top-sub{font-size:11px; color:var(--ink-muted); font-weight:600;}
+
+  .intro{background:var(--navy-950); color:var(--white); border-radius:22px; padding:36px 28px; margin-bottom:28px; position:relative; overflow:hidden;}
+  .intro::after{content:""; position:absolute; width:280px; height:280px; border-radius:50%; background:radial-gradient(circle, rgba(212,169,74,.18), transparent 70%); top:-100px; left:-80px;}
+  .intro h1{font-size:clamp(22px,4vw,28px); font-weight:900; line-height:1.5; margin-bottom:12px; position:relative;}
+  .intro h1 span{color:var(--gold-400);}
+  .intro p{color:#c7d0e6; font-size:14.5px; margin-bottom:22px; position:relative;}
+  .intro .meta{display:flex; gap:20px; font-size:12.5px; color:#a9b4cc; position:relative;}
+  .intro .meta b{color:var(--gold-400);}
+  .btn-start{
+    position:relative; margin-top:22px; width:100%;
+    background:linear-gradient(135deg, var(--gold-400), var(--gold-600));
+    color:var(--navy-950); border:none; border-radius:14px; padding:16px;
+    font-family:'Cairo',sans-serif; font-weight:900; font-size:16px; cursor:pointer;
+    transition:transform .18s;
+  }
+  .btn-start:hover{transform:translateY(-2px);}
+
+  .progress-track{height:6px; background:var(--paper-line); border-radius:999px; overflow:hidden; margin-bottom:28px;}
+  .progress-fill{height:100%; background:linear-gradient(90deg, var(--gold-500), var(--gold-400)); width:0%; transition:width .35s ease;}
+
+  .card{background:var(--white); border:1px solid var(--paper-line); border-radius:20px; padding:32px 28px; box-shadow:0 10px 30px rgba(26,34,56,.05);}
+  .q-num{font-size:12.5px; font-weight:800; color:var(--gold-600); margin-bottom:10px;}
+  .q-text{font-size:19px; font-weight:800; color:var(--navy-900); margin-bottom:24px; line-height:1.6;}
+  .options{display:flex; flex-direction:column; gap:12px;}
+  .opt{
+    display:flex; align-items:center; gap:14px;
+    background:var(--paper); border:1.5px solid var(--paper-line); border-radius:14px;
+    padding:16px 18px; cursor:pointer; text-align:right; font-family:'Cairo',sans-serif;
+    font-size:14.5px; color:var(--ink); transition:border-color .15s, background .15s;
+    width:100%;
+  }
+  .opt:hover{border-color:var(--gold-500); background:#fff;}
+  .opt .letter{
+    width:28px; height:28px; border-radius:50%; background:var(--navy-700); color:#fff;
+    display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; flex-shrink:0;
+  }
+
+  /* results */
+  .results{display:none;}
+  .score-card{background:var(--navy-950); color:var(--white); border-radius:22px; padding:36px 28px; text-align:center; margin-bottom:22px; position:relative; overflow:hidden;}
+  .score-card::after{content:""; position:absolute; width:280px; height:280px; border-radius:50%; background:radial-gradient(circle, rgba(212,169,74,.18), transparent 70%); bottom:-120px; right:-80px;}
+  .score-ring{width:130px; height:130px; margin:0 auto 18px; position:relative;}
+  .score-num{font-size:38px; font-weight:900; font-family:'Tajawal',sans-serif;}
+  .tier-badge{display:inline-block; padding:6px 18px; border-radius:999px; font-weight:800; font-size:14px; margin-top:8px; position:relative;}
+  .score-card p{color:#c7d0e6; font-size:13.5px; margin-top:14px; max-width:400px; margin-inline:auto; position:relative;}
+
+  .rec-list{display:flex; flex-direction:column; gap:12px; margin-bottom:22px;}
+  .rec{background:var(--white); border:1px solid var(--paper-line); border-radius:16px; padding:18px 20px; display:flex; gap:14px; align-items:flex-start;}
+  .rec .icon{font-size:20px; flex-shrink:0;}
+  .rec h4{font-size:14.5px; font-weight:800; color:var(--navy-900); margin-bottom:4px;}
+  .rec p{font-size:13px; color:var(--ink-muted); line-height:1.6;}
+
+  .lead-card{background:var(--white); border:1.5px solid var(--gold-500); border-radius:20px; padding:28px 24px;}
+  .lead-card h3{font-size:17px; font-weight:800; color:var(--navy-900); margin-bottom:6px;}
+  .lead-card p{font-size:13.5px; color:var(--ink-muted); margin-bottom:20px;}
+  .lead-card input{
+    width:100%; border:1.5px solid var(--paper-line); border-radius:12px; padding:13px 16px;
+    font-family:'Cairo',sans-serif; font-size:14px; margin-bottom:12px; outline:none;
+  }
+  .lead-card input:focus{border-color:var(--gold-500);}
+  .btn-submit{
+    width:100%; background:linear-gradient(135deg, var(--gold-400), var(--gold-600)); color:var(--navy-950);
+    border:none; border-radius:12px; padding:15px; font-family:'Cairo',sans-serif; font-weight:900; font-size:15px;
+    cursor:pointer; transition:transform .18s;
+  }
+  .btn-submit:hover{transform:translateY(-2px);}
+  .btn-submit:disabled{opacity:.6; cursor:not-allowed; transform:none;}
+
+  .thanks{display:none; text-align:center; padding:40px 20px;}
+  .thanks .check{width:70px; height:70px; border-radius:50%; background:#e8f5ec; color:var(--green); display:flex; align-items:center; justify-content:center; font-size:34px; margin:0 auto 20px;}
+  .thanks h3{font-size:20px; font-weight:800; color:var(--navy-900); margin-bottom:10px;}
+  .thanks p{font-size:14px; color:var(--ink-muted); max-width:380px; margin:0 auto;}
+
+  .fine{font-size:11.5px; color:#9aa3b8; text-align:center; margin-top:14px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <svg viewBox="0 0 100 100">
+      <g stroke="#1e3a8a" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none">
+        <line x1="50" y1="18" x2="50" y2="76"/><line x1="26" y1="32" x2="74" y2="32"/>
+        <path d="M26 32 L15 52 a11 9 0 0 0 22 0 Z"/><path d="M74 32 L63 52 a11 9 0 0 0 22 0 Z"/>
+        <line x1="38" y1="82" x2="62" y2="82"/><line x1="50" y1="76" x2="50" y2="82"/>
+      </g>
+      <circle cx="50" cy="18" r="5" fill="#d4a94a"/>
+    </svg>
+    <div>
+      <div class="top-name">إيزي يوز</div>
+      <div class="top-sub">تقييم أفضل الممارسات لإدارة المكتب القانوني</div>
+    </div>
+  </div>
+
+  <!-- INTRO -->
+  <div id="intro" class="intro">
+    <h1>مكتبك منظم قد إيه فعلاً؟ <span>اكتشف في دقيقتين</span></h1>
+    <p>5 أسئلة سريعة بس، وهتاخد تقرير فوري بمستوى تنظيم مكتبك مع توصيات عملية تقدر تطبقها من بكرة.</p>
+    <div class="meta">
+      <span>⏱ <b>دقيقتين</b> بس</span>
+      <span>📋 <b>5</b> أسئلة</span>
+      <span>🎁 تقرير <b>مجاني</b></span>
+    </div>
+    <button class="btn-start" onclick="startQuiz()">ابدأ التقييم</button>
+  </div>
+
+  <!-- QUIZ -->
+  <div id="quiz" style="display:none;">
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="card">
+      <div class="q-num" id="qNum">السؤال ١ من ٥</div>
+      <div class="q-text" id="qText"></div>
+      <div class="options" id="qOptions"></div>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="results" class="results">
+    <div class="score-card">
+      <div class="score-ring">
+        <svg viewBox="0 0 130 130" style="width:100%; height:100%;">
+          <circle cx="65" cy="65" r="56" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="10"/>
+          <circle id="scoreArc" cx="65" cy="65" r="56" fill="none" stroke="#d4a94a" stroke-width="10" stroke-linecap="round" stroke-dasharray="352" stroke-dashoffset="352" transform="rotate(-90 65 65)"/>
+        </svg>
+        <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center;">
+          <span class="score-num" id="scoreNum">0</span>
+        </div>
+      </div>
+      <div id="tierBadge" class="tier-badge"></div>
+      <p id="tierDesc"></p>
+    </div>
+
+    <div class="rec-list" id="recList"></div>
+
+    <div class="lead-card">
+      <h3>عايز تشوف التطبيق اللي بيحل النقط دي؟</h3>
+      <p>سيبلنا رقمك وهنبعتلك نسخة تجريبية مجانية دلوقتي، من غير أي التزام.</p>
+      <input type="text" id="leadName" placeholder="الاسم">
+      <input type="tel" id="leadPhone" placeholder="رقم الهاتف" dir="ltr">
+      <input type="text" id="leadOffice" placeholder="اسم المكتب (اختياري)">
+      <button class="btn-submit" id="submitBtn" onclick="submitLead()">احصل على تجربتك المجانية</button>
+    </div>
+    <p class="fine">بياناتك بتتستخدم بس للتواصل معاك بخصوص التجربة المجانية.</p>
+  </div>
+
+  <!-- THANKS -->
+  <div id="thanks" class="thanks">
+    <div class="check">✓</div>
+    <h3>تمام، وصلنا طلبك!</h3>
+    <p>هنتواصل معاك خلال يوم شغل عشان نجهزلك حسابك التجريبي. متشكرين لوقتك 🙏</p>
+  </div>
+
+</div>
+
+<script>
+  // ==== إعدادات الاتصال بقاعدة البيانات ====
+  const SUPABASE_URL = 'https://yxtzvjwwncdkgbzpllnt.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl4dHp2and3bmNka2dienBsbG50Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMTg5NTAsImV4cCI6MjA5OTY5NDk1MH0.hpzaVMl_stxCNDDveI6pEx0-EmaQPCCoiHB8zjzEkys';
+
+  const questions = [
+    {
+      text: "إزاي بتحتفظ ببيانات موكليك حالياً؟",
+      options: [
+        { label: "دفتر ورقي أو ملفات متفرقة", score: 1 },
+        { label: "ملف إكسيل بسيط", score: 2 },
+        { label: "نظام أو برنامج إدارة رقمي", score: 4 },
+        { label: "مفيش نظام ثابت، بفتكر بنفسي", score: 1 },
+      ]
+    },
+    {
+      text: "إزاي بتتابع مواعيد جلساتك؟",
+      options: [
+        { label: "بفتكر أو بكتب في ورقة", score: 1 },
+        { label: "تقويم عادي في الموبايل", score: 3 },
+        { label: "نظام مخصص موضّح فيه كل جلسة مرتبطة بقضيتها", score: 4 },
+        { label: "بصراحة بينسّيني أحياناً", score: 1 },
+      ]
+    },
+    {
+      text: "لو موكل طلب منك تقرير بحالة قضيته دلوقتي، هتاخد قد إيه؟",
+      options: [
+        { label: "أقل من دقيقة", score: 4 },
+        { label: "كام دقيقة أدور في الملفات", score: 2 },
+        { label: "محتاج وقت وأجمع من كذا مكان", score: 1 },
+      ]
+    },
+    {
+      text: "لو ملفاتك الورقية ضاعت أو اتلفت فجأة، هتقدر تسترجع بياناتك؟",
+      options: [
+        { label: "أيوه، عندي نسخة احتياطية رقمية", score: 4 },
+        { label: "جزء بسيط بس", score: 2 },
+        { label: "لأ، هضيع كل حاجة", score: 1 },
+      ]
+    },
+    {
+      text: "إيه أكتر حاجة بتضيّعلك وقت في الشغل الإداري لمكتبك؟",
+      options: [
+        { label: "البحث عن ملفات أو بيانات قديمة", score: 0, pain: "search" },
+        { label: "تنظيم المواعيد والجلسات", score: 0, pain: "schedule" },
+        { label: "كتابة وطباعة التقارير للموكلين", score: 0, pain: "reports" },
+        { label: "التنسيق مع محامين تانيين في نفس القضية", score: 0, pain: "coordination" },
+      ]
+    },
+  ];
+
+  const painTips = {
+    search: { icon: "🔍", title: "وقّف مشكلة البحث عن الملفات", text: "نظام مركزي يخليك توصل لأي بيانات موكل أو قضية بثانية واحدة، بدل ما تدور في أدراج أو ملفات متفرقة." },
+    schedule: { icon: "📅", title: "أجندة موحدة لكل جلساتك", text: "شبكة شهرية بصرية بتوضح كل جلساتك ومواعيدك، وتقدر تطبعها في ورقة واحدة قبل ما تخرج من المكتب." },
+    reports: { icon: "🖨️", title: "تقارير جاهزة بدوسة واحدة", text: "بدل ما تكتب تقرير كل مرة من الصفر، النظام بيبنيه تلقائياً بلوجو مكتبك وبيانات القضية كاملة." },
+    coordination: { icon: "⚖️", title: "دليل محامين مركزي", text: "سجّل محامي المكتب ومحامي الخصم لكل قضية، وارجعلهم في ثانية من غير ما تدور في رسايل قديمة." },
+  };
+
+  let current = 0;
+  let totalScore = 0;
+  let selectedPain = "search";
+
+  function startQuiz(){
+    document.getElementById('intro').style.display = 'none';
+    document.getElementById('quiz').style.display = 'block';
+    renderQuestion();
+  }
+
+  function renderQuestion(){
+    const q = questions[current];
+    document.getElementById('qNum').textContent = `السؤال ${toArabicNum(current+1)} من ٥`;
+    document.getElementById('qText').textContent = q.text;
+    document.getElementById('progressFill').style.width = ((current) / questions.length * 100) + '%';
+
+    const optsWrap = document.getElementById('qOptions');
+    optsWrap.innerHTML = '';
+    const letters = ['أ','ب','ج','د'];
+    q.options.forEach((opt, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'opt';
+      btn.innerHTML = `<span class="letter">${letters[i]}</span><span>${opt.label}</span>`;
+      btn.onclick = () => selectOption(opt);
+      optsWrap.appendChild(btn);
+    });
+  }
+
+  function toArabicNum(n){
+    const map = ['٠','١','٢','٣','٤','٥'];
+    return map[n] || n;
+  }
+
+  function selectOption(opt){
+    totalScore += opt.score;
+    if (opt.pain) selectedPain = opt.pain;
+    current++;
+    if (current < questions.length){
+      renderQuestion();
+    } else {
+      document.getElementById('progressFill').style.width = '100%';
+      showResults();
+    }
+  }
+
+  function showResults(){
+    document.getElementById('quiz').style.display = 'none';
+    document.getElementById('results').style.display = 'block';
+
+    const maxScore = 16;
+    const pct = Math.round((totalScore / maxScore) * 100);
+    document.getElementById('scoreNum').textContent = pct + '%';
+
+    const circumference = 352;
+    const offset = circumference - (circumference * pct / 100);
+    document.getElementById('scoreArc').style.strokeDashoffset = offset;
+
+    let tier, tierColor, tierDesc;
+    if (totalScore <= 7){
+      tier = 'مستوى تقليدي'; tierColor = '#b34747';
+      tierDesc = 'أغلب شغلك الإداري لسه ورقي أو يدوي - وده طبيعي جداً في المرحلة دي، بس فيه فرصة كبيرة توفر بيها وقت ومجهود.';
+    } else if (totalScore <= 12){
+      tier = 'مستوى انتقالي'; tierColor = '#c98a2c';
+      tierDesc = 'أنت بالفعل بتستخدم بعض الأدوات الرقمية، بس لسه فيه جزء بيضيع وقتك - خطوة واحدة كفاية توصلك لمستوى منظم بالكامل.';
+    } else {
+      tier = 'مستوى متقدم'; tierColor = '#2f7d4f';
+      tierDesc = 'مكتبك منظم فعلاً بشكل جيد! فيه تفاصيل بسيطة بس ممكن تحسّنها أكتر وتوفر وقت إضافي.';
+    }
+    const badge = document.getElementById('tierBadge');
+    badge.textContent = tier;
+    badge.style.background = tierColor;
+    badge.style.color = '#fff';
+    document.getElementById('tierDesc').textContent = tierDesc;
+
+    const recList = document.getElementById('recList');
+    recList.innerHTML = '';
+    const tip = painTips[selectedPain];
+    const recs = [
+      { icon: tip.icon, title: tip.title, text: tip.text },
+      { icon: "💾", title: "احمِ بياناتك من الضياع", text: "أي نظام رقمي بسيط بيحفظلك نسخة آمنة من بياناتك، بعيد عن مخاطر الملفات الورقية." },
+      { icon: "⏱", title: "استرجع وقتك", text: "المكاتب اللي رقمنت شغلها بتوفر متوسط ساعة يومياً كانت بتضيع في مهام إدارية بسيطة." },
+    ];
+    recs.forEach(r => {
+      const div = document.createElement('div');
+      div.className = 'rec';
+      div.innerHTML = `<span class="icon">${r.icon}</span><div><h4>${r.title}</h4><p>${r.text}</p></div>`;
+      recList.appendChild(div);
+    });
+  }
+
+  async function submitLead(){
+    const name = document.getElementById('leadName').value.trim();
+    const phone = document.getElementById('leadPhone').value.trim();
+    const office = document.getElementById('leadOffice').value.trim();
+    const btn = document.getElementById('submitBtn');
+
+    if (!name || !phone){
+      alert('من فضلك اكتب اسمك ورقم هاتفك.');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'جاري الإرسال...';
+
+    const tierNames = ['مستوى تقليدي','مستوى انتقالي','مستوى متقدم'];
+    let tier = totalScore <= 7 ? tierNames[0] : (totalScore <= 12 ? tierNames[1] : tierNames[2]);
+
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/leads`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          name, phone, office_name: office || null,
+          score: totalScore, tier, pain_point: selectedPain
+        })
+      });
+
+      if (!res.ok) throw new Error('فشل الإرسال');
+
+      document.getElementById('results').style.display = 'none';
+      document.getElementById('thanks').style.display = 'block';
+    } catch (err) {
+      alert('حصل خطأ أثناء الإرسال، حاول تاني.');
+      btn.disabled = false;
+      btn.textContent = 'احصل على تجربتك المجانية';
+    }
+  }
+</script>
+</body>
+</html>
