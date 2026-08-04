@@ -10,39 +10,84 @@
   :root{
     --navy-950:#0b1730; --navy-900:#0f2049;
     --gold-600:#b8863f; --gold-500:#d4a94a; --gold-400:#e8c877;
-    --paper:#faf6ec; --ink-muted:#5b647a;
+    --paper:#faf6ec; --paper-line:#e7ddc4; --ink:#1a2238; --ink-muted:#5b647a;
   }
   *{box-sizing:border-box; margin:0; padding:0;}
-  body{
-    font-family:'Cairo', sans-serif; background:var(--navy-950); color:#fff;
-    min-height:100vh; display:flex; align-items:center; justify-content:center;
-    text-align:center; padding:24px;
+  body{font-family:'Cairo', sans-serif; background:var(--paper); color:var(--ink);}
+  .container{max-width:760px; margin:0 auto; padding:0 22px;}
+
+  header.nav{background:var(--navy-950); color:#fff; padding:20px 0;}
+  .nav-inner{display:flex; align-items:center; justify-content:space-between; max-width:760px; margin:0 auto; padding:0 22px;}
+  .brand{display:flex; align-items:center; gap:10px;}
+  .brand svg{width:30px; height:30px;}
+  .brand-name{font-weight:800; font-size:15px;}
+  .back-link{color:#c7d0e6; font-size:13.5px; font-weight:700;}
+  .back-link:hover{color:var(--gold-400);}
+
+  .head{padding:52px 0 36px; text-align:center;}
+  .head span{display:inline-block; font-size:12.5px; font-weight:700; color:var(--gold-600); background:rgba(212,169,74,.12); border:1px solid rgba(212,169,74,.35); padding:5px 14px; border-radius:999px; margin-bottom:14px;}
+  .head h1{font-size:clamp(24px,4vw,32px); font-weight:900; color:var(--navy-900); margin-bottom:10px;}
+  .head p{color:var(--ink-muted); font-size:14.5px;}
+
+  .list{display:flex; flex-direction:column; gap:16px; padding-bottom:60px;}
+  .card{
+    background:#fff; border:1px solid var(--paper-line); border-radius:18px; padding:26px 24px;
+    display:flex; justify-content:space-between; align-items:center; gap:20px; text-decoration:none; color:inherit;
+    transition:border-color .18s, transform .18s;
   }
-  .wrap{max-width:480px;}
-  svg{width:64px; height:64px; margin:0 auto 26px;}
-  h1{font-size:26px; font-weight:900; margin-bottom:14px;}
-  p{color:#a9b4cc; font-size:15px; line-height:1.8; margin-bottom:30px;}
-  a.back{
-    display:inline-flex; align-items:center; gap:8px;
-    background:linear-gradient(135deg, var(--gold-400), var(--gold-600));
-    color:var(--navy-950); font-weight:800; font-size:14px;
-    padding:12px 26px; border-radius:12px; text-decoration:none;
+  .card:hover{border-color:var(--gold-500); transform:translateY(-2px);}
+  .card .txt h3{font-size:16.5px; font-weight:800; color:var(--navy-900); margin-bottom:6px;}
+  .card .txt p{font-size:13.5px; color:var(--ink-muted); line-height:1.7;}
+  .card .meta{font-size:12px; color:var(--gold-600); font-weight:700; margin-top:8px;}
+  .card .arrow{font-size:20px; color:var(--gold-500); flex-shrink:0;}
+
+  .soon{
+    background:repeating-linear-gradient(135deg, #fff, #fff 12px, #faf6ec 12px, #faf6ec 24px);
+    border:1.5px dashed var(--paper-line); border-radius:18px; padding:26px 24px; text-align:center; color:var(--ink-muted); font-size:13.5px;
   }
 </style>
 </head>
 <body>
-  <div class="wrap">
-    <svg viewBox="0 0 100 100">
-      <g stroke="#e8c877" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none">
-        <line x1="50" y1="18" x2="50" y2="76"/><line x1="26" y1="32" x2="74" y2="32"/>
-        <path d="M26 32 L15 52 a11 9 0 0 0 22 0 Z"/><path d="M74 32 L63 52 a11 9 0 0 0 22 0 Z"/>
-        <line x1="38" y1="82" x2="62" y2="82"/><line x1="50" y1="76" x2="50" y2="82"/>
-      </g>
-      <circle cx="50" cy="18" r="5" fill="#d4a94a"/>
-    </svg>
-    <h1>📝 المقالات جاية قريباً</h1>
-    <p>بنجهز محتوى مفيد وحقيقي يساعدك في إدارة مكتبك القانوني بشكل أفضل. تابعنا هنا قريباً.</p>
-    <a href="landing.html" class="back">← ارجع للصفحة الرئيسية</a>
+
+<header class="nav">
+  <div class="nav-inner">
+    <div class="brand">
+      <svg viewBox="0 0 100 100">
+        <g stroke="#e8c877" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none">
+          <line x1="50" y1="18" x2="50" y2="76"/><line x1="26" y1="32" x2="74" y2="32"/>
+          <path d="M26 32 L15 52 a11 9 0 0 0 22 0 Z"/><path d="M74 32 L63 52 a11 9 0 0 0 22 0 Z"/>
+          <line x1="38" y1="82" x2="62" y2="82"/><line x1="50" y1="76" x2="50" y2="82"/>
+        </g>
+        <circle cx="50" cy="18" r="5" fill="#d4a94a"/>
+      </svg>
+      <span class="brand-name">إيزي يوز</span>
+    </div>
+    <a href="landing.html" class="back-link">← الصفحة الرئيسية</a>
   </div>
+</header>
+
+<div class="container">
+  <div class="head">
+    <span>📚 المقالات</span>
+    <h1>محتوى مفيد لإدارة مكتبك القانوني</h1>
+    <p>مقالات عملية عن التنظيم والإدارة والتحول الرقمي، مكتوبة لمحامي بيدير مكتبه بنفسه.</p>
+  </div>
+
+  <div class="list">
+    <a href="article-digital-transformation.html" class="card">
+      <div class="txt">
+        <h3>التحول الرقمي لمكتب محامي: ضرورة استراتيجية أم رفاهية تقنية؟</h3>
+        <p>ليه التحول الرقمي بقى ضرورة للمكاتب القانونية الصغيرة، وإزاي تبدأ فيه من غير تعقيد.</p>
+        <div class="meta">⏱ 6 دقائق قراءة</div>
+      </div>
+      <div class="arrow">←</div>
+    </a>
+
+    <div class="soon">
+      📝 مقالات جديدة جاية قريباً عن تنظيم المكتب اليومي، إدارة الوقت، ونمو العمل القانوني
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
