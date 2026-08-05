@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- 1) غيّر العنوان اللي هيظهر في تبويب المتصفح هنا -->
+<title>عنوان المقال هنا — إيزي يوز</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy-950:#0b1730; --navy-900:#0f2049; --navy-800:#152a5e; --navy-700:#1e3a8a;
+    --gold-600:#b8863f; --gold-500:#d4a94a; --gold-400:#e8c877;
+    --paper:#faf6ec; --paper-line:#e7ddc4;
+    --ink:#1a2238; --ink-muted:#5b647a; --white:#fff;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{scroll-behavior:smooth;}
+  body{font-family:'Cairo', sans-serif; background:var(--paper); color:var(--ink); line-height:1.9;}
+  a{color:inherit;}
+  .container{max-width:760px; margin:0 auto; padding:0 22px;}
+
+  header.nav{background:rgba(11,23,48,.95); backdrop-filter:blur(10px); position:sticky; top:0; z-index:50; border-bottom:1px solid rgba(212,169,74,.18);}
+  .nav-inner{display:flex; align-items:center; justify-content:space-between; padding:16px 22px; max-width:760px; margin:0 auto;}
+  .brand{display:flex; align-items:center; gap:10px;}
+  .brand svg{width:32px; height:32px;}
+  .brand-name{color:#fff; font-weight:800; font-size:15px;}
+  .back-link{color:#c7d0e6; font-size:13.5px; font-weight:700; display:flex; align-items:center; gap:6px;}
+  .back-link:hover{color:var(--gold-400);}
+
+  .hero{background:linear-gradient(160deg, var(--navy-900), var(--navy-950)); color:#fff; padding:56px 0 46px;}
+  .eyebrow{display:inline-flex; align-items:center; gap:8px; font-size:12.5px; font-weight:700; color:var(--gold-400); background:rgba(212,169,74,.1); border:1px solid rgba(212,169,74,.35); padding:5px 14px; border-radius:999px; margin-bottom:18px;}
+  .hero h1{font-size:clamp(24px,4vw,34px); font-weight:900; line-height:1.55; margin-bottom:16px;}
+  .hero .meta{display:flex; gap:18px; font-size:13px; color:#a9b4cc; flex-wrap:wrap;}
+
+  article{background:#fff; margin-top:-1px;}
+  .lead{
+    font-size:16.5px; color:var(--ink); font-weight:600; padding:36px 0 6px;
+    border-bottom:1px solid var(--paper-line); margin-bottom:8px;
+  }
+  .content{padding:20px 0 10px;}
+  .content h2{
+    font-size:20px; font-weight:900; color:var(--navy-900); margin:38px 0 16px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .content h2 .num{
+    width:32px; height:32px; border-radius:9px; background:var(--navy-700); color:var(--gold-400);
+    display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:900; flex-shrink:0;
+  }
+  .content h3{font-size:16.5px; font-weight:800; color:var(--navy-800); margin:22px 0 10px;}
+  .content p{font-size:15px; color:#333c50; margin-bottom:14px;}
+  .content ul, .content ol{margin:0 0 16px; padding-inline-start:22px; display:flex; flex-direction:column; gap:9px;}
+  .content li{font-size:15px; color:#333c50;}
+  .content strong{color:var(--navy-900);}
+
+  .callout{
+    background:var(--paper); border:1px solid var(--paper-line); border-inline-start:4px solid var(--gold-500);
+    border-radius:14px; padding:22px 22px; margin:28px 0; display:flex; align-items:center; gap:18px; flex-wrap:wrap;
+  }
+  .callout .txt{flex:1; min-width:220px;}
+  .callout .txt strong{display:block; font-size:15px; color:var(--navy-900); margin-bottom:4px;}
+  .callout .txt span{font-size:13.5px; color:var(--ink-muted);}
+  .callout .btn{
+    white-space:nowrap; background:linear-gradient(135deg, var(--gold-400), var(--gold-600)); color:var(--navy-950);
+    font-weight:800; font-size:13.5px; padding:11px 20px; border-radius:10px; text-decoration:none;
+  }
+
+  .final-cta{
+    background:linear-gradient(135deg, var(--navy-800), var(--navy-950)); color:#fff;
+    border-radius:22px; padding:44px 30px; text-align:center; margin:44px 0 8px;
+  }
+  .final-cta h3{font-size:21px; font-weight:900; margin-bottom:10px;}
+  .final-cta p{color:#c7d0e6; font-size:14px; max-width:420px; margin:0 auto 22px;}
+  .final-cta .actions{display:flex; gap:12px; justify-content:center; flex-wrap:wrap;}
+  .btn-gold{background:linear-gradient(135deg, var(--gold-400), var(--gold-600)); color:var(--navy-950); font-weight:800; font-size:14px; padding:13px 26px; border-radius:12px; text-decoration:none;}
+  .btn-ghost{border:1.5px solid rgba(255,255,255,.3); color:#fff; font-weight:800; font-size:14px; padding:13px 26px; border-radius:12px; text-decoration:none;}
+
+  footer{background:var(--navy-950); color:#8b96b3; text-align:center; padding:34px 0; font-size:12.5px; margin-top:40px;}
+  footer a:hover{color:var(--gold-400);}
+
+  @media (max-width:600px){
+    .container{padding:0 18px;}
+  }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="nav-inner">
+    <div class="brand">
+      <svg viewBox="0 0 100 100">
+        <g stroke="#e8c877" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none">
+          <line x1="50" y1="18" x2="50" y2="76"/><line x1="26" y1="32" x2="74" y2="32"/>
+          <path d="M26 32 L15 52 a11 9 0 0 0 22 0 Z"/><path d="M74 32 L63 52 a11 9 0 0 0 22 0 Z"/>
+          <line x1="38" y1="82" x2="62" y2="82"/><line x1="50" y1="76" x2="50" y2="82"/>
+        </g>
+        <circle cx="50" cy="18" r="5" fill="#d4a94a"/>
+      </svg>
+      <span class="brand-name">إيزي يوز</span>
+    </div>
+    <a href="articles.html" class="back-link">→ كل المقالات</a>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="container">
+    <span class="eyebrow">📚 مقال</span>
+
+    <!-- 2) عنوان المقال الظاهر فوق -->
+    <h1>اكتب عنوان المقال هنا</h1>
+
+    <div class="meta">
+      <!-- 3) وقت القراءة التقريبي -->
+      <span>⏱ ٥ دقائق قراءة</span>
+      <span>🏷 التصنيف هنا</span>
+    </div>
+  </div>
+</section>
+
+<article>
+  <div class="container">
+
+    <!-- 4) فقرة المقدمة (2-3 جمل تلخص المقال) -->
+    <p class="lead">
+      اكتب هنا فقرة المقدمة اللي بتلخص موضوع المقال في 2-3 جمل بس، عشان تشد القارئ من الأول.
+    </p>
+
+    <div class="content">
+
+      <!-- 5) القسم الأول - كرر نفس الشكل ده لكل قسم جديد -->
+      <h2><span class="num">١</span> عنوان القسم الأول</h2>
+      <p>اكتب هنا فقرة أو أكتر عن القسم ده.</p>
+
+      <!-- مثال قائمة نقطية (احذفها لو مش محتاجها) -->
+      <ul>
+        <li>نقطة أولى</li>
+        <li>نقطة تانية</li>
+        <li>نقطة تالتة</li>
+      </ul>
+
+      <!-- 6) صندوق دعوة لإجراء (اختياري) - انسخه وحطه في أي مكان مناسب جوه المقال -->
+      <div class="callout">
+        <div class="txt">
+          <strong>اكتب هنا جملة تحفيزية قصيرة</strong>
+          <span>اكتب هنا جملة توضيحية</span>
+        </div>
+        <!-- الرابط ده بيودي لنموذج التقييم، ممكن تغيّره لـ landing.html لو حابب -->
+        <a href="quiz.html" class="btn">نص الزرار ←</a>
+      </div>
+
+      <h2><span class="num">٢</span> عنوان القسم الثاني</h2>
+      <p>اكتب هنا فقرة أو أكتر عن القسم ده.</p>
+
+      <h3>عنوان فرعي لو محتاج تقسيم أصغر</h3>
+      <p>محتوى العنوان الفرعي.</p>
+
+      <h2>الخاتمة</h2>
+      <p>اكتب هنا خلاصة المقال في فقرة قصيرة.</p>
+
+    </div>
+
+    <!-- 7) الصندوق الختامي - نفس الرابط في كل المقالات، مش محتاج تغييره غالباً -->
+    <div class="final-cta">
+      <h3>ابدأ خطوتك الأولى في التحول الرقمي</h3>
+      <p>جرّب نظام إدارة مكتب قانوني بسيط ومصمم خصيصاً للمكاتب الصغيرة — مجاناً، من غير أي التزام.</p>
+      <div class="actions">
+        <a href="landing.html#pricing" class="btn-gold">ابدأ تجربتك المجانية</a>
+        <a href="quiz.html" class="btn-ghost">قيّم مكتبك أولاً</a>
+      </div>
+    </div>
+
+  </div>
+</article>
+
+<footer>
+  <div class="container">
+    ⚖️ إيزي يوز — نظام إدارة المكتب القانوني &nbsp;·&nbsp;
+    <a href="articles.html">كل المقالات</a> &nbsp;·&nbsp;
+    <a href="landing.html">الصفحة الرئيسية</a>
+  </div>
+</footer>
+
+</body>
+</html>

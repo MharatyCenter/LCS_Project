@@ -73,21 +73,40 @@
     <p>مقالات عملية عن التنظيم والإدارة والتحول الرقمي، مكتوبة لمحامي بيدير مكتبه بنفسه.</p>
   </div>
 
-  <div class="list">
-    <a href="article-digital-transformation.html" class="card">
-      <div class="txt">
-        <h3>التحول الرقمي لمكتب محامي: ضرورة استراتيجية أم رفاهية تقنية؟</h3>
-        <p>ليه التحول الرقمي بقى ضرورة للمكاتب القانونية الصغيرة، وإزاي تبدأ فيه من غير تعقيد.</p>
-        <div class="meta">⏱ 6 دقائق قراءة</div>
-      </div>
-      <div class="arrow">←</div>
-    </a>
+  <div class="list" id="articlesList"></div>
 
-    <div class="soon">
-      📝 مقالات جديدة جاية قريباً عن تنظيم المكتب اليومي، إدارة الوقت، ونمو العمل القانوني
-    </div>
+  <div class="soon">
+    📝 مقالات جديدة جاية قريباً عن تنظيم المكتب اليومي، إدارة الوقت، ونمو العمل القانوني
   </div>
 </div>
+
+<script>
+  /* ==========================================================
+     قائمة المقالات - عشان تضيف مقال جديد، انسخ السطر اللي شكله:
+     { file: "اسم-الملف.html", title: "العنوان", desc: "وصف قصير سطرين", readTime: "٥ دقائق قراءة" },
+     والصقه في القائمة تحت، وغيّر البيانات الأربعة.
+     الأحدث تحطه فوق عشان يظهر أول واحد.
+     ========================================================== */
+  const articles = [
+    { file: "article-digital-transformation.html", title: "التحول الرقمي لمكتب محامي: ضرورة استراتيجية أم رفاهية تقنية؟", desc: "ليه التحول الرقمي بقى ضرورة للمكاتب القانونية الصغيرة، وإزاي تبدأ فيه من غير تعقيد.", readTime: "٦ دقائق قراءة" },
+  ];
+
+  const listEl = document.getElementById('articlesList');
+  articles.forEach(a => {
+    const card = document.createElement('a');
+    card.href = a.file;
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="txt">
+        <h3>${a.title}</h3>
+        <p>${a.desc}</p>
+        <div class="meta">⏱ ${a.readTime}</div>
+      </div>
+      <div class="arrow">←</div>
+    `;
+    listEl.appendChild(card);
+  });
+</script>
 
 </body>
 </html>
